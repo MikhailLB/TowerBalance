@@ -10,9 +10,10 @@ class GameConstants {
   static const worldWidth = 9.0;
   static const worldHeight = 16.0;
 
-  /// Centre of the camera at game start; matches a 9x16 viewport with the
-  /// origin in the centre.
-  static Vector2 get initialCameraTarget => Vector2(0, 0);
+  /// Centre of the camera at game start. We bias slightly downward so the
+  /// painted starter building is comfortably in view together with the hook
+  /// swinging above it.
+  static Vector2 get initialCameraTarget => Vector2(0, 0.5);
 
   /// Y of the top of the ground rectangle. Anything below this is "out of
   /// bounds" and counts as a fail.
@@ -60,7 +61,7 @@ class GameConstants {
 
   /// Camera follows the tower top. The top stays this many meters below the
   /// camera centre — leaves room for the hook above.
-  static const cameraOffsetBelowCenter = 3.5;
+  static const cameraOffsetBelowCenter = 2.0;
 
   /// Time spent smoothly panning the camera to a new target.
   static const cameraLerp = 4.0;

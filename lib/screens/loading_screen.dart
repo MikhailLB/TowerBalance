@@ -9,8 +9,15 @@ import '../app/app_assets.dart';
 import 'main_menu_screen.dart';
 
 /// Initial splash that plays a looping promo video and shows a 4-state
-/// progress bar while heavy assets warm up. The bar only starts moving once
-/// the video is actually playing so the two stay visually in sync.
+/// progress bar while heavy assets warm up.
+///
+/// Sequence:
+/// 1. Black screen while videos initialise.
+/// 2. Video appears alone for ~1.2s so the user clearly sees the loop start.
+/// 3. The 4-state loading bar fades in and fills over ~5 seconds while the
+///    Flame image cache is preheated.
+/// 4. Once the bar reaches state 4 (and at least 7s have elapsed in total),
+///    fade-transition into the main menu.
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({super.key});
 
@@ -23,13 +30,15 @@ class _LoadingScreenState extends State<LoadingScreen>
   VideoPlayerController? _portraitVideo;
   VideoPlayerController? _landscapeVideo;
   bool _videosReady = false;
+  bool _showBar = false;
   bool _hasNavigated = false;
+  Timer? _videoKeepalive;
 
   late final AnimationController _progressController;
 
-  /// Minimum time the splash stays on-screen (so the loading video has a
-  /// chance to actually be enjoyed even on a fast phone).
-  static const _minDuration = Duration(milliseconds: 5000);
+  static const _minDuration = Duration(milliseconds: 7000);
+  static const _videoSoloDuration = Duration(milliseconds: 1200);
+  static const _barDuration = Duration(milliseconds: 5000);
 
   @override
   void initState() {
@@ -44,7 +53,7 @@ class _LoadingScreenState extends State<LoadingScreen>
 
     _progressController = AnimationController(
       vsync: this,
-      duration: _minDuration,
+      duration: _barDuration,
     );
 
     _initialise();
@@ -54,32 +63,41 @@ class _LoadingScreenState extends State<LoadingScreen>
     final start = DateTime.now();
     Flame.images.prefix = '';
 
-    // 1) Initialise the videos and start them playing BEFORE we show the
-    //    progress bar, so the bar does not race ahead of the video.
     await _initVideos();
     if (!mounted) return;
     setState(() => _videosReady = true);
 
-    // Give the engine one frame to actually display the first video frame
-    // before kicking off the bar animation.
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+    // Some Android codecs decide to pause unprompted shortly after
+    // initialise(). Re-issue play() periodically so the video keeps moving.
+    _videoKeepalive =
+        Timer.periodic(const Duration(milliseconds: 500), (_) async {
+      final p = _portraitVideo;
+      final l = _landscapeVideo;
+      if (p != null && p.value.isInitialized && !p.value.isPlaying) {
+        await p.play();
+      }
+      if (l != null && l.value.isInitialized && !l.value.isPlaying) {
+        await l.play();
+      }
+    });
 
-    // 2) Start the bar animation in parallel with asset preloading.
+    // Let the user enjoy the video alone for a moment before the bar joins.
+    await Future<void>.delayed(_videoSoloDuration);
+    if (!mounted) return;
+    setState(() => _showBar = true);
+
     final barFuture = _progressController.forward();
     final assetsFuture = _preloadGameAssets();
 
-    await Future.wait([assetsFuture]);
+    await assetsFuture;
     await barFuture;
 
-    // 3) Ensure the splash is visible for at least [_minDuration].
     final elapsed = DateTime.now().difference(start);
     if (elapsed < _minDuration) {
       await Future<void>.delayed(_minDuration - elapsed);
     }
 
-    // 4) Linger briefly on full bar so the user clearly sees state 4.
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-
+    await Future<void>.delayed(const Duration(milliseconds: 400));
     _goToMenu();
   }
 
@@ -94,12 +112,10 @@ class _LoadingScreenState extends State<LoadingScreen>
 
       await Future.wait([portrait.initialize(), landscape.initialize()]);
 
-      // Configure looping/volume sequentially before playback so the first
-      // frame shown is already part of a real, looping playback.
-      await portrait.setLooping(true);
-      await portrait.setVolume(0);
-      await landscape.setLooping(true);
-      await landscape.setVolume(0);
+      portrait.setLooping(true);
+      landscape.setLooping(true);
+      portrait.setVolume(0);
+      landscape.setVolume(0);
 
       await portrait.play();
       await landscape.play();
@@ -147,6 +163,7 @@ class _LoadingScreenState extends State<LoadingScreen>
 
   @override
   void dispose() {
+    _videoKeepalive?.cancel();
     _portraitVideo?.dispose();
     _landscapeVideo?.dispose();
     _progressController.dispose();
@@ -180,9 +197,7 @@ class _LoadingScreenState extends State<LoadingScreen>
                   ),
                 ),
               ),
-              // Show the bar only once the video is actually playing so it
-              // never visually finishes before the splash even starts.
-              if (_videosReady)
+              if (_showBar)
                 Align(
                   alignment: const Alignment(0, 0.85),
                   child: AnimatedBuilder(
@@ -192,7 +207,11 @@ class _LoadingScreenState extends State<LoadingScreen>
                       // Snap into 4 discrete bar states (1..4) like the artwork.
                       final state = (progress * 4).clamp(0, 4).floor();
                       final visibleState = state.clamp(1, 4);
-                      return _LoadingBar(state: visibleState);
+                      return AnimatedOpacity(
+                        opacity: 1,
+                        duration: const Duration(milliseconds: 250),
+                        child: _LoadingBar(state: visibleState),
+                      );
                     },
                   ),
                 ),
