@@ -8,6 +8,7 @@ import 'components/cloud.dart';
 import 'components/ground.dart';
 import 'components/hook.dart';
 import 'components/sky_background.dart';
+import 'components/start_bg.dart';
 import 'components/start_building.dart';
 import 'components/tower_block.dart';
 import 'game_constants.dart';
@@ -55,6 +56,7 @@ class TowerWorld extends Forge2DWorld with HasGameReference<TowerGame> {
   Future<void> onLoad() async {
     await super.onLoad();
     await add(SkyBackground());
+    await add(StartBg());
     await add(GroundDecal());
     await add(Ground());
     await add(StartBuilding());
@@ -82,10 +84,9 @@ class TowerWorld extends Forge2DWorld with HasGameReference<TowerGame> {
   /// Player tapped — drop the swinging block. No-op unless we're swinging.
   void dropBlock() {
     if (status.value != TowerGameStatus.swinging || !hook.hasBlock) return;
-    final spawnPos = Vector2(
-      hook.currentX,
-      hook.blockY + GameConstants.blockHeight / 2,
-    );
+    // Spawn the body exactly at the visible block centre so the drop never
+    // teleports.
+    final spawnPos = Vector2(hook.currentX, hook.currentY);
     final velocity = Vector2(hook.currentVelocityX, 0);
     final block = TowerBlock(
       skinIndex: skinPicker(),

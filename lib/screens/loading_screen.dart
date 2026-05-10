@@ -11,18 +11,18 @@ import 'main_menu_screen.dart';
 /// Initial splash that plays a looping promo video and shows a 4-state
 /// progress bar while heavy assets warm up.
 ///
-/// Sequence:
-/// 1. Black screen while video controllers initialise (typically <1s).
-/// 2. Video appears and begins looping immediately.
-/// 3. The 4-state loading bar fades in after a short pause (400ms) so the
-///    user can clearly see the video start before the bar appears.
-/// 4. Bar fills over ~4.5 s while the Flame image cache is preheated.
-/// 5. After a minimum total splash time of 6s, fade into the main menu.
-///
-/// Video looping: `setLooping(true)` on some Android codecs briefly pauses at
-/// the end before seeking, creating a black flash. We workaround this by
-/// listening to the position and manually seeking to 0 when the video is within
-/// 200 ms of its end.
+/// Video lifecycle (kept deliberately minimal — earlier "keep-alive" timers
+/// that issued play()/seekTo() every 250 ms were the actual cause of the
+/// video stuttering and freezing):
+///   1. Build the controller from the asset.
+///   2. await initialize().
+///   3. setLooping(true) and setVolume(0).
+///   4. After the widget is in the tree (post-frame callback), call play()
+///      ONCE. Trust the codec from there.
+///   5. As a defensive backup, attach a single listener that detects the
+///      "playback finished" event the platform emits when looping isn't
+///      honoured and re-issues seekTo(0) + play(). This fires at most twice
+///      per loop, not on a polling timer.
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({super.key});
 
@@ -37,6 +37,9 @@ class _LoadingScreenState extends State<LoadingScreen>
   bool _videosReady = false;
   bool _showBar = false;
   bool _hasNavigated = false;
+
+  VoidCallback? _portraitListener;
+  VoidCallback? _landscapeListener;
 
   late final AnimationController _progressController;
 
@@ -71,7 +74,12 @@ class _LoadingScreenState extends State<LoadingScreen>
     if (!mounted) return;
     setState(() => _videosReady = true);
 
-    // Short pause so user sees the video moving before the bar appears.
+    // Start playback only once the texture is bound to a widget in the tree.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _portraitVideo?.play();
+      _landscapeVideo?.play();
+    });
+
     await Future<void>.delayed(_barDelay);
     if (!mounted) return;
     setState(() => _showBar = true);
@@ -96,35 +104,42 @@ class _LoadingScreenState extends State<LoadingScreen>
           VideoPlayerController.asset(AppAssets.loadingVideoPortrait);
       final landscape =
           VideoPlayerController.asset(AppAssets.loadingVideoLandscape);
-      _portraitVideo = portrait;
-      _landscapeVideo = landscape;
 
       await Future.wait([portrait.initialize(), landscape.initialize()]);
 
-      // Seamless-loop workaround: manually seek to 0 when within 200 ms of end
-      // instead of relying on the codec's built-in loop (which can flash black).
-      portrait.addListener(() => _seamlessLoop(portrait));
-      landscape.addListener(() => _seamlessLoop(landscape));
+      debugPrint(
+        'LoadingScreen: portrait dur=${portrait.value.duration} '
+        'size=${portrait.value.size}',
+      );
 
+      portrait.setLooping(true);
+      landscape.setLooping(true);
       portrait.setVolume(0);
       landscape.setVolume(0);
 
-      await portrait.play();
-      await landscape.play();
+      // Defensive loop fallback — fires only when the platform reports the
+      // video has actually completed and was not auto-restarted by setLooping.
+      _portraitListener = () => _restartIfFinished(portrait);
+      _landscapeListener = () => _restartIfFinished(landscape);
+      portrait.addListener(_portraitListener!);
+      landscape.addListener(_landscapeListener!);
+
+      _portraitVideo = portrait;
+      _landscapeVideo = landscape;
     } catch (e, st) {
       debugPrint('LoadingScreen: video init failed: $e\n$st');
     }
   }
 
-  /// Seek the controller back to the start if it is within 200 ms of the end.
-  void _seamlessLoop(VideoPlayerController c) {
-    if (!c.value.isInitialized) return;
-    final duration = c.value.duration;
-    if (duration == Duration.zero) return;
-    final remaining = duration - c.value.position;
-    if (remaining.inMilliseconds <= 200 && remaining.inMilliseconds >= 0) {
-      c.seekTo(Duration.zero);
-    }
+  /// Called by the controller's listener — restarts playback if and only if
+  /// the video reports it just finished. Cheap and idempotent.
+  void _restartIfFinished(VideoPlayerController c) {
+    final value = c.value;
+    if (!value.isInitialized) return;
+    if (value.isPlaying) return;
+    if (value.position < value.duration) return;
+    c.seekTo(Duration.zero);
+    c.play();
   }
 
   Future<void> _preloadGameAssets() async {
@@ -166,9 +181,13 @@ class _LoadingScreenState extends State<LoadingScreen>
 
   @override
   void dispose() {
-    _portraitVideo?.removeListener(() => _seamlessLoop(_portraitVideo!));
+    if (_portraitListener != null) {
+      _portraitVideo?.removeListener(_portraitListener!);
+    }
+    if (_landscapeListener != null) {
+      _landscapeVideo?.removeListener(_landscapeListener!);
+    }
     _portraitVideo?.dispose();
-    _landscapeVideo?.removeListener(() => _seamlessLoop(_landscapeVideo!));
     _landscapeVideo?.dispose();
     _progressController.dispose();
     super.dispose();
@@ -192,27 +211,27 @@ class _LoadingScreenState extends State<LoadingScreen>
                 _FullCoverVideo(controller: controller)
               else
                 Container(color: Colors.black),
-              // Subtle vignette at the bottom to make bar more readable.
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.center,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black45],
-                  ),
-                ),
-              ),
               if (_showBar)
-                Align(
-                  alignment: const Alignment(0, 0.85),
-                  child: AnimatedBuilder(
-                    animation: _progressController,
-                    builder: (context, _) {
-                      final progress = _progressController.value;
-                      final state =
-                          (progress * 4).clamp(0.0, 4.0).floor().clamp(1, 4);
-                      return _LoadingBar(state: state);
-                    },
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: MediaQuery.of(context).padding.bottom +
+                      (isPortrait ? 56 : 14),
+                  child: Center(
+                    child: AnimatedBuilder(
+                      animation: _progressController,
+                      builder: (context, _) {
+                        final progress = _progressController.value;
+                        final state = (progress * 4)
+                            .clamp(0.0, 4.0)
+                            .floor()
+                            .clamp(1, 4);
+                        return _LoadingBar(
+                          state: state,
+                          isPortrait: isPortrait,
+                        );
+                      },
+                    ),
                   ),
                 ),
             ],
@@ -246,13 +265,16 @@ class _FullCoverVideo extends StatelessWidget {
 }
 
 class _LoadingBar extends StatelessWidget {
-  const _LoadingBar({required this.state});
+  const _LoadingBar({required this.state, required this.isPortrait});
 
   final int state;
+  final bool isPortrait;
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.shortestSide * 0.7;
+    final size = MediaQuery.of(context).size;
+    // Smaller bar in landscape so it can't possibly cover hero artwork.
+    final width = isPortrait ? size.width * 0.7 : size.height * 0.4;
     return Image.asset(
       AppAssets.loadingBar(state),
       width: width,

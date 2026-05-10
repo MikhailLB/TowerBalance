@@ -10,12 +10,18 @@ import '../game_constants.dart';
 
 /// The crane hook + the block currently being teased above the tower.
 ///
-/// The hook is purely visual until the player taps to drop. When dropped,
-/// the world reads `currentX` and `currentVelocityX` to spawn an actual
-/// dynamic [TowerBlock] at the same place.
+/// The whole assembly (block + V-shaped chains + hook sprite + crane line)
+/// behaves as a single rigid pendulum hanging from a virtual pivot above the
+/// tower. The pivot is fixed in world space (a chain-length above the
+/// resting block) and the entire assembly rotates around it, so the block
+/// traces a true left-right arc — slow at the extremes, fast through the
+/// centre — and visibly rises a touch at the edges, just like a real swing.
+///
+/// Visuals match the screenshot reference: a single crane wire goes from off
+/// screen down to the hook, then two parallel chains diverge from the hook to
+/// the top corners of the block (forming a V).
 class Hook extends PositionComponent {
-  Hook({required this.skinIndexProvider})
-      : super(priority: 6);
+  Hook({required this.skinIndexProvider}) : super(priority: 10);
 
   /// Returns the skin index (1..6) for the *next* block to attach.
   final int Function() skinIndexProvider;
@@ -37,21 +43,40 @@ class Hook extends PositionComponent {
   /// calls [attachNewBlock].
   bool _hasBlock = true;
 
-  /// Current X position of the swinging block (world coordinates).
-  double get currentX =>
-      math.sin(_phase) * GameConstants.hookAmplitude;
+  // --- Pendulum math ---------------------------------------------------------
 
-  /// Derivative of position (m/s) — used as the spawn velocity of the block.
-  double get currentVelocityX =>
-      math.cos(_phase) *
-      GameConstants.hookAmplitude *
-      (math.pi / halfPeriod);
+  /// Current pendulum angle (radians, 0 = straight down).
+  double get _angle =>
+      math.sin(_phase) * GameConstants.hookMaxAngle;
 
-  /// Y position of the hanging block (top of tower minus a fixed offset).
-  double get blockY => topY - GameConstants.hookBlockOffsetAboveTop;
+  /// Y of the pivot (fixed in world space).
+  double get _pivotY =>
+      topY -
+      GameConstants.hookBlockOffsetAboveTop -
+      GameConstants.blockHeight -
+      GameConstants.hookChainLength;
 
-  /// Y position of the hook image (a bit above the block).
-  double get hookY => blockY - GameConstants.blockHeight - 0.4;
+  double get _blockCenterX =>
+      math.sin(_angle) * GameConstants.hookChainLength;
+
+  double get _blockCenterY =>
+      _pivotY + math.cos(_angle) * GameConstants.hookChainLength;
+
+  /// Spawn position X (world).
+  double get currentX => _blockCenterX;
+
+  /// Spawn position Y (world centre of block).
+  double get currentY => _blockCenterY;
+
+  /// Tangential X velocity at the current angle.
+  double get currentVelocityX {
+    final phaseDot = math.pi / halfPeriod;
+    final angleDot = math.cos(_phase) * GameConstants.hookMaxAngle * phaseDot;
+    return math.cos(_angle) * GameConstants.hookChainLength * angleDot;
+  }
+
+  /// Y position of the hanging block's top edge.
+  double get blockY => _blockCenterY - GameConstants.blockHeight / 2;
 
   bool get hasBlock => _hasBlock;
 
@@ -72,76 +97,117 @@ class Hook extends PositionComponent {
     _currentSkin = skinIndexProvider();
     _blockImage = await Flame.images.load(AppAssets.block(_currentSkin));
     _hasBlock = true;
-    // Don't reset phase — preserve "where the swing is" for less surprise.
   }
 
   @override
   void update(double dt) {
     super.update(dt);
-    // Advance phase. Half period = pi radians of phase, so dphi/dt = pi / Tp.
     _phase += dt * (math.pi / halfPeriod);
-    // Keep phase bounded for floating-point health.
     if (_phase > math.pi * 2) _phase -= math.pi * 2;
   }
 
   @override
   void render(Canvas canvas) {
-    final paint = Paint()..isAntiAlias = false;
-    final blockX = currentX;
-    final yBlock = blockY;
-    final yHook = hookY;
+    final paint = Paint()
+      ..isAntiAlias = true
+      ..filterQuality = FilterQuality.medium;
 
-    // Hook image (pulley + chain spool). Anchored so the chain bottom lands
-    // exactly on the block top.
+    final angle = _angle;
+    final dirX = math.sin(angle);
+    final dirY = math.cos(angle);
+
+    // Pivot — virtual point above tower; renders as the off-screen end of the
+    // crane wire.
+    final pivotX = 0.0;
+    final pivotY = _pivotY;
+
+    final blockCx = _blockCenterX;
+    final blockCy = _blockCenterY;
+
+    // The visible hook sprite sits on the chain just above the block.
+    const hookHeight = 1.0;
     final hookAspect = _hookImage.width / _hookImage.height;
-    const hookHeight = 1.4;
     final hookWidth = hookHeight * hookAspect;
-    final hookSrc = Rect.fromLTWH(
-      0,
-      0,
-      _hookImage.width.toDouble(),
-      _hookImage.height.toDouble(),
-    );
-    final hookCenterY = yHook - hookHeight / 2;
-    final hookDst = Rect.fromCenter(
-      center: Offset(blockX, hookCenterY),
-      width: hookWidth,
-      height: hookHeight,
-    );
+    final hookOffset = GameConstants.blockHeight / 2 + hookHeight / 2 + 0.2;
+    final hookCx = blockCx - dirX * hookOffset;
+    final hookCy = blockCy - dirY * hookOffset;
 
-    // Chain (a thin dark rectangle from the top of viewport down to hook).
-    final chainPaint = Paint()..color = const Color(0xFF222222);
-    canvas.drawRect(
-      Rect.fromCenter(
-        center: Offset(blockX, hookCenterY - 8),
-        width: 0.08,
-        height: 16,
-      ),
-      chainPaint,
+    final chainPaint = Paint()
+      ..color = const Color(0xFF1F1F1F)
+      ..strokeWidth = 0.10
+      ..strokeCap = StrokeCap.round;
+
+    // 1) Crane wire — a single thicker line from the pivot (and beyond, off
+    //    the top of the screen) down to the hook.
+    final aboveX = pivotX - dirX * 18;
+    final aboveY = pivotY - dirY * 18;
+    canvas.drawLine(
+      Offset(aboveX, aboveY),
+      Offset(hookCx, hookCy),
+      Paint()
+        ..color = const Color(0xFF1F1F1F)
+        ..strokeWidth = 0.13
+        ..strokeCap = StrokeCap.round,
     );
 
-    canvas.drawImageRect(_hookImage, hookSrc, hookDst, paint);
-
+    // 2) Two diverging chains from the hook to the top corners of the block.
     if (_hasBlock) {
-      final blockAspect = _blockImage.width / _blockImage.height;
-      var w = GameConstants.blockWidth;
-      var h = w / blockAspect;
-      if (h < GameConstants.blockHeight) {
-        h = GameConstants.blockHeight;
-        w = h * blockAspect;
-      }
-      final blockDst = Rect.fromCenter(
-        center: Offset(blockX, yBlock + GameConstants.blockHeight / 2),
-        width: w,
-        height: h,
-      );
-      final blockSrc = Rect.fromLTWH(
+      final hw = GameConstants.blockWidth * 0.42;
+      final hh = GameConstants.blockHeight / 2;
+      final cosA = math.cos(angle);
+      final sinA = math.sin(angle);
+      final tlX = blockCx + (-hw) * cosA - (-hh) * sinA;
+      final tlY = blockCy + (-hw) * sinA + (-hh) * cosA;
+      final trX = blockCx + (hw) * cosA - (-hh) * sinA;
+      final trY = blockCy + (hw) * sinA + (-hh) * cosA;
+      canvas.drawLine(
+          Offset(hookCx, hookCy), Offset(tlX, tlY), chainPaint);
+      canvas.drawLine(
+          Offset(hookCx, hookCy), Offset(trX, trY), chainPaint);
+    }
+
+    // 3) Hook sprite (rotated to follow the swing).
+    canvas.save();
+    canvas.translate(hookCx, hookCy);
+    canvas.rotate(angle);
+    canvas.drawImageRect(
+      _hookImage,
+      Rect.fromLTWH(
         0,
         0,
-        _blockImage.width.toDouble(),
-        _blockImage.height.toDouble(),
+        _hookImage.width.toDouble(),
+        _hookImage.height.toDouble(),
+      ),
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: hookWidth,
+        height: hookHeight,
+      ),
+      paint,
+    );
+    canvas.restore();
+
+    // 4) Block.
+    if (_hasBlock) {
+      canvas.save();
+      canvas.translate(blockCx, blockCy);
+      canvas.rotate(angle);
+      canvas.drawImageRect(
+        _blockImage,
+        Rect.fromLTWH(
+          0,
+          0,
+          _blockImage.width.toDouble(),
+          _blockImage.height.toDouble(),
+        ),
+        Rect.fromCenter(
+          center: Offset.zero,
+          width: GameConstants.blockWidth,
+          height: GameConstants.blockHeight,
+        ),
+        paint,
       );
-      canvas.drawImageRect(_blockImage, blockSrc, blockDst, paint);
+      canvas.restore();
     }
   }
 }

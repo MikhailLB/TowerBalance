@@ -84,10 +84,11 @@ class CloudLayer extends Component with HasGameReference {
 
   Cloud _spawnCloud() {
     final width = GameConstants.worldWidth;
-    final speed = (_rand.nextDouble() * 0.5 + 0.25) *
+    final speed = (_rand.nextDouble() * 0.4 + 0.2) *
         (_rand.nextBool() ? 1 : -1);
-    final relativeY = -_rand.nextDouble() * 7 - 1; // above the tower
-    final scale = 2.5 + _rand.nextDouble() * 2.5;
+    final relativeY = -_rand.nextDouble() * 6 - 1; // above the tower
+    // Keep clouds modest so they decorate the sky without dominating it.
+    final scale = 1.3 + _rand.nextDouble() * 1.3;
     final startX = (_rand.nextDouble() - 0.5) * width;
     final cloudOpacity = 0.7 + _rand.nextDouble() * 0.3;
     return Cloud(

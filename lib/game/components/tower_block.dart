@@ -59,17 +59,14 @@ class TowerBlock extends BodyComponent {
 
   @override
   void render(Canvas canvas) {
-    final aspect = _image.width / _image.height;
-    var w = GameConstants.blockWidth;
-    var h = w / aspect;
-    if (h < GameConstants.blockHeight) {
-      h = GameConstants.blockHeight;
-      w = h * aspect;
-    }
+    // Render the sprite at the EXACT body dimensions so stacked blocks meet
+    // edge-to-edge with no visual overhang. The image gets squashed if its
+    // natural aspect doesn't match — that's a deliberate trade-off for clean
+    // stacking.
     final dst = Rect.fromCenter(
       center: Offset.zero,
-      width: w,
-      height: h,
+      width: GameConstants.blockWidth,
+      height: GameConstants.blockHeight,
     );
     final src = Rect.fromLTWH(
       0,
@@ -77,7 +74,14 @@ class TowerBlock extends BodyComponent {
       _image.width.toDouble(),
       _image.height.toDouble(),
     );
-    canvas.drawImageRect(_image, src, dst, Paint()..isAntiAlias = false);
+    canvas.drawImageRect(
+      _image,
+      src,
+      dst,
+      Paint()
+        ..isAntiAlias = true
+        ..filterQuality = FilterQuality.medium,
+    );
   }
 
   /// Returns the world-space top Y of the block (smallest Y of its corners).
