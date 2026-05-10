@@ -48,6 +48,7 @@ class TowerGame extends Forge2DGame<TowerWorld> with TapCallbacks {
   @override
   void update(double dt) {
     super.update(dt);
+    if (!world.isMounted) return;
     _followTower(dt);
   }
 

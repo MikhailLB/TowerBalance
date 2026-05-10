@@ -17,12 +17,16 @@ import 'tower_game.dart';
 /// Holds every world-space component (background, blocks, hook, ground) and
 /// owns the gameplay state machine that drives the round.
 class TowerWorld extends Forge2DWorld with HasGameReference<TowerGame> {
-  TowerWorld({required this.skinPicker});
+  TowerWorld({required this.skinPicker})
+      : hook = Hook(skinIndexProvider: skinPicker);
 
   /// Returns 1..6 — invoked every time we need a new block skin.
   final int Function() skinPicker;
 
-  late final Hook hook;
+  // Constructed up-front (not `late`) so that the game loop, which can run a
+  // few frames before [onLoad] finishes, never crashes with a
+  // LateInitializationError when [update] reads the hook.
+  final Hook hook;
   final List<TowerBlock> _placedBlocks = [];
   TowerBlock? _activeBlock;
 
@@ -50,10 +54,6 @@ class TowerWorld extends Forge2DWorld with HasGameReference<TowerGame> {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    // Await every component so the round starts only when every sprite/body
-    // is fully ready (otherwise render() can race ahead of onLoad and crash
-    // with LateInitializationError on `_image`).
-    hook = Hook(skinIndexProvider: skinPicker);
     await add(SkyBackground());
     await add(GroundDecal());
     await add(Ground());
@@ -122,7 +122,12 @@ class TowerWorld extends Forge2DWorld with HasGameReference<TowerGame> {
   @override
   void update(double dt) {
     super.update(dt);
-    if (status.value == TowerGameStatus.paused ||
+    // `ready` covers the small window between the world being mounted and
+    // [TowerGame.onLoad] calling [startRound] — touching the hook before its
+    // own onLoad has finished is fine for plain field assignments, but we
+    // still skip work to avoid surprises.
+    if (status.value == TowerGameStatus.ready ||
+        status.value == TowerGameStatus.paused ||
         status.value == TowerGameStatus.gameOver) {
       return;
     }
