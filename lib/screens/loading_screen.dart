@@ -12,12 +12,17 @@ import 'main_menu_screen.dart';
 /// progress bar while heavy assets warm up.
 ///
 /// Sequence:
-/// 1. Black screen while videos initialise.
-/// 2. Video appears alone for ~1.2s so the user clearly sees the loop start.
-/// 3. The 4-state loading bar fades in and fills over ~5 seconds while the
-///    Flame image cache is preheated.
-/// 4. Once the bar reaches state 4 (and at least 7s have elapsed in total),
-///    fade-transition into the main menu.
+/// 1. Black screen while video controllers initialise (typically <1s).
+/// 2. Video appears and begins looping immediately.
+/// 3. The 4-state loading bar fades in after a short pause (400ms) so the
+///    user can clearly see the video start before the bar appears.
+/// 4. Bar fills over ~4.5 s while the Flame image cache is preheated.
+/// 5. After a minimum total splash time of 6s, fade into the main menu.
+///
+/// Video looping: `setLooping(true)` on some Android codecs briefly pauses at
+/// the end before seeking, creating a black flash. We workaround this by
+/// listening to the position and manually seeking to 0 when the video is within
+/// 200 ms of its end.
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({super.key});
 
@@ -32,13 +37,12 @@ class _LoadingScreenState extends State<LoadingScreen>
   bool _videosReady = false;
   bool _showBar = false;
   bool _hasNavigated = false;
-  Timer? _videoKeepalive;
 
   late final AnimationController _progressController;
 
-  static const _minDuration = Duration(milliseconds: 7000);
-  static const _videoSoloDuration = Duration(milliseconds: 1200);
-  static const _barDuration = Duration(milliseconds: 5000);
+  static const _minDuration = Duration(milliseconds: 6000);
+  static const _barDelay = Duration(milliseconds: 400);
+  static const _barDuration = Duration(milliseconds: 4500);
 
   @override
   void initState() {
@@ -67,37 +71,22 @@ class _LoadingScreenState extends State<LoadingScreen>
     if (!mounted) return;
     setState(() => _videosReady = true);
 
-    // Some Android codecs decide to pause unprompted shortly after
-    // initialise(). Re-issue play() periodically so the video keeps moving.
-    _videoKeepalive =
-        Timer.periodic(const Duration(milliseconds: 500), (_) async {
-      final p = _portraitVideo;
-      final l = _landscapeVideo;
-      if (p != null && p.value.isInitialized && !p.value.isPlaying) {
-        await p.play();
-      }
-      if (l != null && l.value.isInitialized && !l.value.isPlaying) {
-        await l.play();
-      }
-    });
-
-    // Let the user enjoy the video alone for a moment before the bar joins.
-    await Future<void>.delayed(_videoSoloDuration);
+    // Short pause so user sees the video moving before the bar appears.
+    await Future<void>.delayed(_barDelay);
     if (!mounted) return;
     setState(() => _showBar = true);
 
     final barFuture = _progressController.forward();
     final assetsFuture = _preloadGameAssets();
 
-    await assetsFuture;
-    await barFuture;
+    await Future.wait([barFuture, assetsFuture]);
 
     final elapsed = DateTime.now().difference(start);
     if (elapsed < _minDuration) {
       await Future<void>.delayed(_minDuration - elapsed);
     }
 
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
     _goToMenu();
   }
 
@@ -112,8 +101,11 @@ class _LoadingScreenState extends State<LoadingScreen>
 
       await Future.wait([portrait.initialize(), landscape.initialize()]);
 
-      portrait.setLooping(true);
-      landscape.setLooping(true);
+      // Seamless-loop workaround: manually seek to 0 when within 200 ms of end
+      // instead of relying on the codec's built-in loop (which can flash black).
+      portrait.addListener(() => _seamlessLoop(portrait));
+      landscape.addListener(() => _seamlessLoop(landscape));
+
       portrait.setVolume(0);
       landscape.setVolume(0);
 
@@ -121,6 +113,17 @@ class _LoadingScreenState extends State<LoadingScreen>
       await landscape.play();
     } catch (e, st) {
       debugPrint('LoadingScreen: video init failed: $e\n$st');
+    }
+  }
+
+  /// Seek the controller back to the start if it is within 200 ms of the end.
+  void _seamlessLoop(VideoPlayerController c) {
+    if (!c.value.isInitialized) return;
+    final duration = c.value.duration;
+    if (duration == Duration.zero) return;
+    final remaining = duration - c.value.position;
+    if (remaining.inMilliseconds <= 200 && remaining.inMilliseconds >= 0) {
+      c.seekTo(Duration.zero);
     }
   }
 
@@ -163,8 +166,9 @@ class _LoadingScreenState extends State<LoadingScreen>
 
   @override
   void dispose() {
-    _videoKeepalive?.cancel();
+    _portraitVideo?.removeListener(() => _seamlessLoop(_portraitVideo!));
     _portraitVideo?.dispose();
+    _landscapeVideo?.removeListener(() => _seamlessLoop(_landscapeVideo!));
     _landscapeVideo?.dispose();
     _progressController.dispose();
     super.dispose();
@@ -188,12 +192,13 @@ class _LoadingScreenState extends State<LoadingScreen>
                 _FullCoverVideo(controller: controller)
               else
                 Container(color: Colors.black),
+              // Subtle vignette at the bottom to make bar more readable.
               const DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.center,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black54],
+                    colors: [Colors.transparent, Colors.black45],
                   ),
                 ),
               ),
@@ -204,14 +209,9 @@ class _LoadingScreenState extends State<LoadingScreen>
                     animation: _progressController,
                     builder: (context, _) {
                       final progress = _progressController.value;
-                      // Snap into 4 discrete bar states (1..4) like the artwork.
-                      final state = (progress * 4).clamp(0, 4).floor();
-                      final visibleState = state.clamp(1, 4);
-                      return AnimatedOpacity(
-                        opacity: 1,
-                        duration: const Duration(milliseconds: 250),
-                        child: _LoadingBar(state: visibleState),
-                      );
+                      final state =
+                          (progress * 4).clamp(0.0, 4.0).floor().clamp(1, 4);
+                      return _LoadingBar(state: state);
                     },
                   ),
                 ),

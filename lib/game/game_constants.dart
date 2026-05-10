@@ -28,8 +28,9 @@ class GameConstants {
   static const blockHeight = 0.95;
 
   /// Vertical distance between the bottom of the swinging hook block and the
-  /// current top of the tower.
-  static const hookBlockOffsetAboveTop = 6.0;
+  /// current top of the tower. Kept small enough that hook and tower both fit
+  /// comfortably on screen without a large empty gap between them.
+  static const hookBlockOffsetAboveTop = 3.5;
 
   /// Horizontal sway: hook X = sin(t) * amplitude.
   static const hookAmplitude = 2.6;
@@ -61,7 +62,7 @@ class GameConstants {
 
   /// Camera follows the tower top. The top stays this many meters below the
   /// camera centre — leaves room for the hook above.
-  static const cameraOffsetBelowCenter = 2.0;
+  static const cameraOffsetBelowCenter = 1.5;
 
   /// Time spent smoothly panning the camera to a new target.
   static const cameraLerp = 4.0;
