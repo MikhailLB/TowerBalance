@@ -12,47 +12,54 @@ class GameConstants {
 
   /// Centre of the camera at game start. Shifted slightly downward so the
   /// painted city horizon sits near the lower third of the viewport while the
-  /// hook + swinging block fill the upper two thirds.
+  /// hook fills the upper portion.
   static Vector2 get initialCameraTarget => Vector2(0, 1.0);
 
   /// Y of the top of the ground rectangle. Anything below this is "out of
   /// bounds" and counts as a fail.
   static const groundTopY = 7.5;
 
-  /// First "platform" the player stacks on — the painted starter shop. The
-  /// physics body (and the rendered sprite) match these dimensions.
+  /// First "platform" the player stacks on — the painted starter shop.
   static const startBuildingTopY = 5.1;
-  static const startBuildingWidth = 2.6;
-  static const startBuildingHeight = 2.4;
+  static const startBuildingWidth = 3.0;
+  static const startBuildingHeight = 2.7;
 
   /// Block dimensions. The sprite is rendered at exactly these dimensions so
   /// stacked blocks line up edge-to-edge with no overhang/overlap. Aspect
-  /// (~1.15) is intentionally close to the natural aspect of the source PNGs
+  /// (~1.2) is intentionally close to the natural aspect of the source PNGs
   /// (0.85-1.18) to minimise visible squashing.
-  static const blockWidth = 3.0;
-  static const blockHeight = 2.6;
+  static const blockWidth = 3.6;
+  static const blockHeight = 3.0;
 
-  /// Pendulum geometry — chain pivots above the tower and swings the block in
-  /// a real arc (not a flat slide).
-  static const hookChainLength = 5.0;
+  // --- Hook (horizontal slide, no pendulum) ---------------------------------
 
-  /// Resting (centred) gap between the bottom of the swinging block and the
-  /// current top of the tower.
+  /// Horizontal amplitude of the hook's left/right slide (in meters from the
+  /// world centre). With worldWidth=9 and blockWidth=3.6, an amplitude of 2.5
+  /// keeps the block fully on-screen at both extremes.
+  static const hookAmplitude = 2.5;
+
+  /// Vertical gap between the bottom of the swinging block and the current
+  /// top of the tower.
   static const hookBlockOffsetAboveTop = 1.0;
 
-  /// Maximum swing angle of the pendulum in radians (~25 degrees). Translates
-  /// to a horizontal amplitude of `chainLength * sin(maxAngle)` ≈ 2.0 m.
-  static const hookMaxAngle = 0.42;
+  /// Vertical length of the inverted-V chains that connect the hook bottom to
+  /// the top corners of the block.
+  static const hookChainHeight = 1.3;
 
-  /// Initial half-period of the swing (seconds for a one-way swing). Higher
+  /// Visible hook sprite height (its width is computed from the source aspect).
+  static const hookSpriteHeight = 2.6;
+
+  /// Initial half-period of the slide (seconds for one-way traversal). Higher
   /// = slower / smoother.
-  static const hookInitialHalfPeriod = 1.9;
+  static const hookInitialHalfPeriod = 1.7;
 
   /// Floor of the speed-up ramp. The hook never gets faster than this.
-  static const hookMinHalfPeriod = 0.7;
+  static const hookMinHalfPeriod = 0.55;
 
   /// How much the period shrinks per successfully placed block.
   static const hookSpeedUpPerBlock = 0.05;
+
+  // --- Physics ---------------------------------------------------------------
 
   /// Acceleration of gravity used by the Forge2D world.
   static const gravity = 26.0;
@@ -68,7 +75,7 @@ class GameConstants {
 
   /// Minimum X-overlap (in meters) between the new block and the previous
   /// tower top required to keep playing. Less overlap == failed placement.
-  static const minOverlapToCount = 1.0;
+  static const minOverlapToCount = 1.2;
 
   /// Camera follows the tower top. The top stays this many meters below the
   /// camera centre — leaves room for the hook above.
