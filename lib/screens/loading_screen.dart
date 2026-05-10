@@ -8,11 +8,9 @@ import 'package:video_player/video_player.dart';
 import '../app/app_assets.dart';
 import 'main_menu_screen.dart';
 
-/// Initial splash screen that plays a looping promo video and animates a
-/// 4-state progress bar while the heavy assets are warming up in the cache.
-///
-/// The screen is the only place in the app that supports both portrait and
-/// landscape — once we hand off to the menu we lock to portrait again.
+/// Initial splash that plays a looping promo video and shows a 4-state
+/// progress bar while heavy assets warm up. The bar only starts moving once
+/// the video is actually playing so the two stay visually in sync.
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({super.key});
 
@@ -25,9 +23,13 @@ class _LoadingScreenState extends State<LoadingScreen>
   VideoPlayerController? _portraitVideo;
   VideoPlayerController? _landscapeVideo;
   bool _videosReady = false;
+  bool _hasNavigated = false;
 
   late final AnimationController _progressController;
-  Timer? _navigationTimer;
+
+  /// Minimum time the splash stays on-screen (so the loading video has a
+  /// chance to actually be enjoyed even on a fast phone).
+  static const _minDuration = Duration(milliseconds: 5000);
 
   @override
   void initState() {
@@ -42,60 +44,77 @@ class _LoadingScreenState extends State<LoadingScreen>
 
     _progressController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 4500),
+      duration: _minDuration,
     );
 
     _initialise();
   }
 
   Future<void> _initialise() async {
-    // Kick off the video init and the asset warm-up in parallel so the bar
-    // tracks real work rather than a fake timer.
-    final portrait = VideoPlayerController.asset(AppAssets.loadingVideoPortrait);
-    final landscape =
-        VideoPlayerController.asset(AppAssets.loadingVideoLandscape);
-    _portraitVideo = portrait;
-    _landscapeVideo = landscape;
+    final start = DateTime.now();
+    Flame.images.prefix = '';
 
-    final videoFuture = Future.wait([
-      portrait.initialize(),
-      landscape.initialize(),
-    ]).then((_) {
-      portrait
-        ..setLooping(true)
-        ..setVolume(0)
-        ..play();
-      landscape
-        ..setLooping(true)
-        ..setVolume(0)
-        ..play();
-      if (mounted) setState(() => _videosReady = true);
-    });
+    // 1) Initialise the videos and start them playing BEFORE we show the
+    //    progress bar, so the bar does not race ahead of the video.
+    await _initVideos();
+    if (!mounted) return;
+    setState(() => _videosReady = true);
 
+    // Give the engine one frame to actually display the first video frame
+    // before kicking off the bar animation.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // 2) Start the bar animation in parallel with asset preloading.
+    final barFuture = _progressController.forward();
     final assetsFuture = _preloadGameAssets();
 
-    _progressController.forward();
-    await Future.wait([videoFuture, assetsFuture]);
-    // Make sure the bar visibly reaches state 4 even if work finished early.
-    if (_progressController.value < 1.0) {
-      await _progressController.forward();
-    } else {
-      // Already finished animating; just wait a beat so users see state 4.
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+    await Future.wait([assetsFuture]);
+    await barFuture;
+
+    // 3) Ensure the splash is visible for at least [_minDuration].
+    final elapsed = DateTime.now().difference(start);
+    if (elapsed < _minDuration) {
+      await Future<void>.delayed(_minDuration - elapsed);
     }
+
+    // 4) Linger briefly on full bar so the user clearly sees state 4.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+
     _goToMenu();
   }
 
+  Future<void> _initVideos() async {
+    try {
+      final portrait =
+          VideoPlayerController.asset(AppAssets.loadingVideoPortrait);
+      final landscape =
+          VideoPlayerController.asset(AppAssets.loadingVideoLandscape);
+      _portraitVideo = portrait;
+      _landscapeVideo = landscape;
+
+      await Future.wait([portrait.initialize(), landscape.initialize()]);
+
+      // Configure looping/volume sequentially before playback so the first
+      // frame shown is already part of a real, looping playback.
+      await portrait.setLooping(true);
+      await portrait.setVolume(0);
+      await landscape.setLooping(true);
+      await landscape.setVolume(0);
+
+      await portrait.play();
+      await landscape.play();
+    } catch (e, st) {
+      debugPrint('LoadingScreen: video init failed: $e\n$st');
+    }
+  }
+
   Future<void> _preloadGameAssets() async {
-    // Use Flame's shared image cache (no `assets/` prefix) so anything we
-    // request later via Flame.images is already decoded.
     Flame.images.prefix = '';
     final paths = <String>[
       AppAssets.sky,
       AppAssets.ground,
       AppAssets.cloud,
       AppAssets.hook,
-      AppAssets.button,
       AppAssets.startBg,
       AppAssets.startBuilding,
       AppAssets.logo,
@@ -103,15 +122,22 @@ class _LoadingScreenState extends State<LoadingScreen>
       ...AppAssets.allBlocks,
       for (var i = 1; i <= 4; i++) AppAssets.loadingBar(i),
     ];
-    await Future.wait(paths.map((p) => Flame.images.load(p)));
+    for (final p in paths) {
+      try {
+        await Flame.images.load(p);
+      } catch (e) {
+        debugPrint('LoadingScreen: failed to preload $p: $e');
+      }
+    }
   }
 
   void _goToMenu() {
-    if (!mounted) return;
-    _navigationTimer?.cancel();
+    if (_hasNavigated || !mounted) return;
+    _hasNavigated = true;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondary) => const MainMenuScreen(),
+        pageBuilder: (context, animation, secondary) =>
+            const MainMenuScreen(),
         transitionDuration: const Duration(milliseconds: 600),
         transitionsBuilder: (context, animation, secondary, child) =>
             FadeTransition(opacity: animation, child: child),
@@ -124,7 +150,6 @@ class _LoadingScreenState extends State<LoadingScreen>
     _portraitVideo?.dispose();
     _landscapeVideo?.dispose();
     _progressController.dispose();
-    _navigationTimer?.cancel();
     super.dispose();
   }
 
@@ -140,11 +165,12 @@ class _LoadingScreenState extends State<LoadingScreen>
           return Stack(
             fit: StackFit.expand,
             children: [
-              if (_videosReady && controller != null)
+              if (_videosReady &&
+                  controller != null &&
+                  controller.value.isInitialized)
                 _FullCoverVideo(controller: controller)
               else
                 Container(color: Colors.black),
-              // Subtle bottom gradient so the bar stays readable on bright frames.
               const DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -154,19 +180,22 @@ class _LoadingScreenState extends State<LoadingScreen>
                   ),
                 ),
               ),
-              Align(
-                alignment: const Alignment(0, 0.85),
-                child: AnimatedBuilder(
-                  animation: _progressController,
-                  builder: (context, _) {
-                    final progress = _progressController.value;
-                    // Snap into 4 discrete bar states (1..4) like the artwork.
-                    final state = (progress * 4).clamp(0, 4).floor();
-                    final visibleState = state.clamp(1, 4);
-                    return _LoadingBar(state: visibleState);
-                  },
+              // Show the bar only once the video is actually playing so it
+              // never visually finishes before the splash even starts.
+              if (_videosReady)
+                Align(
+                  alignment: const Alignment(0, 0.85),
+                  child: AnimatedBuilder(
+                    animation: _progressController,
+                    builder: (context, _) {
+                      final progress = _progressController.value;
+                      // Snap into 4 discrete bar states (1..4) like the artwork.
+                      final state = (progress * 4).clamp(0, 4).floor();
+                      final visibleState = state.clamp(1, 4);
+                      return _LoadingBar(state: visibleState);
+                    },
+                  ),
                 ),
-              ),
             ],
           );
         },

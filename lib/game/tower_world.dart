@@ -50,13 +50,16 @@ class TowerWorld extends Forge2DWorld with HasGameReference<TowerGame> {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    add(SkyBackground());
-    add(GroundDecal());
-    add(Ground());
-    add(StartBuilding());
+    // Await every component so the round starts only when every sprite/body
+    // is fully ready (otherwise render() can race ahead of onLoad and crash
+    // with LateInitializationError on `_image`).
     hook = Hook(skinIndexProvider: skinPicker);
-    add(hook);
-    add(CloudLayer());
+    await add(SkyBackground());
+    await add(GroundDecal());
+    await add(Ground());
+    await add(StartBuilding());
+    await add(hook);
+    await add(CloudLayer());
   }
 
   /// Begin a new round (called from [TowerGame] after onLoad).

@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../app/app_theme.dart';
 import '../game/game_status.dart';
@@ -12,6 +11,10 @@ import '../widgets/pixel_button.dart';
 
 /// Hosts the [TowerGame] inside a [GameWidget] and adds Flutter-side overlays
 /// for the HUD, pause menu and game over screen.
+///
+/// The heavy [GameWidget] is intentionally mounted *after* the navigation
+/// transition is complete so the route push animation stays smooth and the
+/// app cannot appear "frozen" while Flame is initialising.
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
 
@@ -20,18 +23,23 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> {
-  late TowerGame _game;
+  TowerGame? _game;
   late final math.Random _rand = math.Random();
   bool _scoreSubmitted = false;
 
   @override
   void initState() {
     super.initState();
-    SystemChrome.setPreferredOrientations(const [
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]);
-    _spawnGame(useSlowHook: false);
+    // Defer the Flame world creation until after the route transition has
+    // finished painting. Otherwise we try to spin up Forge2D + load textures
+    // mid-animation which can stall the UI thread for hundreds of ms.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      if (!mounted) return;
+      setState(() {
+        _spawnGame(useSlowHook: false);
+      });
+    });
   }
 
   void _spawnGame({required bool useSlowHook}) {
@@ -51,11 +59,11 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _onPause() async {
-    _game.setPaused(true);
+    _game?.setPaused(true);
   }
 
   void _onResume() {
-    _game.setPaused(false);
+    _game?.setPaused(false);
   }
 
   Future<void> _onUseSlowHook() async {
@@ -69,8 +77,8 @@ class _GameScreenState extends State<GameScreen> {
   Future<void> _onUseSecondChance() async {
     final granted = await progress.consumeSecondChance();
     if (!granted) return;
-    _game.requestSecondChance();
-    _game.setPaused(false);
+    _game?.requestSecondChance();
+    _game?.setPaused(false);
   }
 
   Future<void> _onRestart() async {
@@ -91,76 +99,155 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final game = _game;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        if (_game.world.status.value == TowerGameStatus.swinging ||
-            _game.world.status.value == TowerGameStatus.falling) {
-          _game.setPaused(true);
-        } else if (_game.world.status.value == TowerGameStatus.paused ||
-            _game.world.status.value == TowerGameStatus.gameOver) {
+        if (game == null) {
+          await _onExit();
+          return;
+        }
+        final status = game.world.status.value;
+        if (status == TowerGameStatus.swinging ||
+            status == TowerGameStatus.falling) {
+          game.setPaused(true);
+        } else if (status == TowerGameStatus.paused ||
+            status == TowerGameStatus.gameOver) {
           await _onExit();
         }
       },
       child: Scaffold(
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            GameWidget(
-              key: ValueKey(_game),
-              game: _game,
-            ),
-            ValueListenableBuilder<int>(
-              valueListenable: _game.world.score,
-              builder: (context, score, child) => SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: _Hud(
-                    score: score,
-                    onPause: _onPause,
-                    slowHooks: progress.slowHookBoosts,
-                    onUseSlowHook:
-                        progress.slowHookBoosts > 0 ? _onUseSlowHook : null,
-                  ),
+        backgroundColor: AppColors.sky,
+        body: game == null ? const _GameLoading() : _GameView(
+          game: game,
+          onPause: _onPause,
+          onResume: _onResume,
+          onRestart: _onRestart,
+          onExit: _onExit,
+          onUseSlowHook:
+              progress.slowHookBoosts > 0 ? _onUseSlowHook : null,
+          onUseSecondChance: _onUseSecondChance,
+          submitFinalScore: _submitFinalScore,
+        ),
+      ),
+    );
+  }
+}
+
+class _GameLoading extends StatelessWidget {
+  const _GameLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.sky,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(
+            color: AppColors.accent,
+            strokeWidth: 4,
+          ),
+          const SizedBox(height: 18),
+          Text('Building...', style: AppTextStyles.button(size: 22)),
+        ],
+      ),
+    );
+  }
+}
+
+class _GameView extends StatelessWidget {
+  const _GameView({
+    required this.game,
+    required this.onPause,
+    required this.onResume,
+    required this.onRestart,
+    required this.onExit,
+    required this.onUseSlowHook,
+    required this.onUseSecondChance,
+    required this.submitFinalScore,
+  });
+
+  final TowerGame game;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+  final VoidCallback onRestart;
+  final VoidCallback onExit;
+  final VoidCallback? onUseSlowHook;
+  final Future<void> Function() onUseSecondChance;
+  final Future<void> Function(int score) submitFinalScore;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        RepaintBoundary(
+          child: GameWidget(
+            key: ValueKey(game),
+            game: game,
+            backgroundBuilder: (_) => Container(color: AppColors.sky),
+            loadingBuilder: (_) => const _GameLoading(),
+            errorBuilder: (_, error) => Container(
+              color: AppColors.sky,
+              alignment: Alignment.center,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Failed to load game:\n$error',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.body(size: 18),
                 ),
               ),
             ),
-            ValueListenableBuilder<TowerGameStatus>(
-              valueListenable: _game.world.status,
-              builder: (context, status, _) {
-                if (status == TowerGameStatus.paused) {
-                  return _PauseOverlay(
-                    onResume: _onResume,
-                    onExit: _onExit,
-                  );
-                }
-                if (status == TowerGameStatus.gameOver) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) async {
-                    await _submitFinalScore(_game.world.score.value);
-                    if (mounted) setState(() {});
-                  });
-                  return _GameOverOverlay(
-                    score: _game.world.score.value,
-                    highScore: math.max(
-                      progress.highScore,
-                      _game.world.score.value,
-                    ),
-                    secondChances: progress.secondChanceBoosts,
-                    onRestart: _onRestart,
-                    onExit: _onExit,
-                    onUseSecondChance:
-                        progress.secondChanceBoosts > 0 && _game.world.score.value > 0
-                            ? _onUseSecondChance
-                            : null,
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-          ],
+          ),
         ),
-      ),
+        ValueListenableBuilder<int>(
+          valueListenable: game.world.score,
+          builder: (context, score, _) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: _Hud(
+                score: score,
+                onPause: onPause,
+                slowHooks: progress.slowHookBoosts,
+                onUseSlowHook: onUseSlowHook,
+              ),
+            ),
+          ),
+        ),
+        ValueListenableBuilder<TowerGameStatus>(
+          valueListenable: game.world.status,
+          builder: (context, status, _) {
+            if (status == TowerGameStatus.paused) {
+              return _PauseOverlay(onResume: onResume, onExit: onExit);
+            }
+            if (status == TowerGameStatus.gameOver) {
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
+                await submitFinalScore(game.world.score.value);
+              });
+              return _GameOverOverlay(
+                score: game.world.score.value,
+                highScore: math.max(
+                  progress.highScore,
+                  game.world.score.value,
+                ),
+                secondChances: progress.secondChanceBoosts,
+                onRestart: onRestart,
+                onExit: onExit,
+                onUseSecondChance:
+                    progress.secondChanceBoosts > 0 &&
+                            game.world.score.value > 0
+                        ? () => onUseSecondChance()
+                        : null,
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+      ],
     );
   }
 }
@@ -258,8 +345,7 @@ class _RoundButton extends StatelessWidget {
         child: SizedBox(
           width: 48,
           height: 48,
-          child: Icon(icon,
-              color: AppColors.text, size: 28),
+          child: Icon(icon, color: AppColors.text, size: 28),
         ),
       ),
     );
@@ -280,7 +366,11 @@ class _PauseOverlay extends StatelessWidget {
         children: [
           PixelButton(label: 'Continue', onPressed: onResume),
           const SizedBox(height: 12),
-          PixelButton(label: 'Main Menu', onPressed: onExit),
+          PixelButton(
+            label: 'Main Menu',
+            onPressed: onExit,
+            color: PixelButtonColor.secondary,
+          ),
         ],
       ),
     );
@@ -324,7 +414,11 @@ class _GameOverOverlay extends StatelessWidget {
           ],
           PixelButton(label: 'Restart', onPressed: onRestart),
           const SizedBox(height: 12),
-          PixelButton(label: 'Main Menu', onPressed: onExit),
+          PixelButton(
+            label: 'Main Menu',
+            onPressed: onExit,
+            color: PixelButtonColor.secondary,
+          ),
         ],
       ),
     );
