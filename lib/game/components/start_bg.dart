@@ -8,14 +8,15 @@ import '../../app/app_assets.dart';
 import '../game_constants.dart';
 import '../tower_game.dart';
 
-/// Painted backdrop scene that sits behind the start building.
+/// Painted strip of distant city silhouettes that sits between the sky and the
+/// starter shop.
 ///
-/// Renders [AppAssets.startBg] as a wide static image anchored at the ground,
-/// extending upward by its natural aspect. Sits between the tiled
-/// [SkyBackground] (priority -100) and the start building (priority 0), so the
-/// distant city / horizon line shows through the empty sky next to the tower.
+/// `start_bg_asset.webp` is a 1080x416 wide horizontal panel (aspect ~2.6)
+/// containing rooftops, lamp posts and a faint cityscape. We render it three
+/// times the world width so the edges stay off-screen even when the camera
+/// pans, with its bottom resting just below the ground line.
 class StartBg extends PositionComponent with HasGameReference<TowerGame> {
-  StartBg() : super(priority: -60);
+  StartBg() : super(priority: -50);
 
   late final ui.Image _image;
 
@@ -23,15 +24,13 @@ class StartBg extends PositionComponent with HasGameReference<TowerGame> {
   Future<void> onLoad() async {
     _image = await Flame.images.load(AppAssets.startBg);
     final aspect = _image.width / _image.height;
-    // Stretch the backdrop wider than the viewport so its edges always sit
-    // off-screen even on tall portrait phones.
-    final width = GameConstants.worldWidth * 2.0;
+    final width = GameConstants.worldWidth * 3.0;
     final height = width / aspect;
     size = Vector2(width, height);
     anchor = Anchor.bottomCenter;
-    // Bottom of the artwork sits a hair below the ground line so the dirt
-    // strip from GroundDecal can finish it off.
-    position = Vector2(0, GameConstants.groundTopY + 0.3);
+    // Bottom of the artwork sits just below the ground line so the painted
+    // pavement / dirt edge meets the real ground without a visible seam.
+    position = Vector2(0, GameConstants.groundTopY + 0.4);
   }
 
   @override

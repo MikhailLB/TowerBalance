@@ -1,19 +1,30 @@
-import 'package:flame/components.dart';
-import 'package:flame_forge2d/flame_forge2d.dart';
+import 'dart:ui' as ui;
 
+import 'package:flame/flame.dart';
+import 'package:flame_forge2d/flame_forge2d.dart';
+import 'package:flutter/material.dart';
+
+import '../../app/app_assets.dart';
 import '../game_constants.dart';
 
-/// First "platform" the player stacks on.
+/// First "platform" the player stacks on — the painted starter shop.
 ///
-/// Visually invisible — the painted shop / city scene is provided entirely by
-/// [StartBg]. We keep an actual physics body so that the first block has
-/// something concrete to land on at a deterministic spot in the centre of the
-/// screen, and Forge2D contact resolution stays clean.
+/// Renders [AppAssets.startBuilding] (the small green "BALANCE" shop) at
+/// exactly the body dimensions, so the visible footprint and the collision
+/// shape are identical. Sits on the ground line.
 class StartBuilding extends BodyComponent {
   StartBuilding() : super(priority: 0);
 
+  late final ui.Image _image;
+
   @override
   bool get renderBody => false;
+
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    _image = await Flame.images.load(AppAssets.startBuilding);
+  }
 
   @override
   Body createBody() {
@@ -32,5 +43,30 @@ class StartBuilding extends BodyComponent {
       restitution: 0.0,
     ));
     return body;
+  }
+
+  @override
+  void render(Canvas canvas) {
+    // BodyComponent renders in body-local space. Sprite occupies the exact
+    // body footprint so visuals == collider.
+    final dst = Rect.fromCenter(
+      center: Offset.zero,
+      width: GameConstants.startBuildingWidth,
+      height: GameConstants.startBuildingHeight,
+    );
+    final src = Rect.fromLTWH(
+      0,
+      0,
+      _image.width.toDouble(),
+      _image.height.toDouble(),
+    );
+    canvas.drawImageRect(
+      _image,
+      src,
+      dst,
+      Paint()
+        ..isAntiAlias = true
+        ..filterQuality = FilterQuality.medium,
+    );
   }
 }

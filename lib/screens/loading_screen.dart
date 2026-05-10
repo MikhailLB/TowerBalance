@@ -12,17 +12,19 @@ import 'main_menu_screen.dart';
 /// progress bar while heavy assets warm up.
 ///
 /// Video lifecycle (kept deliberately minimal — earlier "keep-alive" timers
-/// that issued play()/seekTo() every 250 ms were the actual cause of the
-/// video stuttering and freezing):
+/// that called play()/seekTo() every 250 ms were the actual cause of the
+/// stutter):
 ///   1. Build the controller from the asset.
 ///   2. await initialize().
-///   3. setLooping(true) and setVolume(0).
-///   4. After the widget is in the tree (post-frame callback), call play()
-///      ONCE. Trust the codec from there.
-///   5. As a defensive backup, attach a single listener that detects the
-///      "playback finished" event the platform emits when looping isn't
-///      honoured and re-issues seekTo(0) + play(). This fires at most twice
-///      per loop, not on a polling timer.
+///   3. setLooping(true), setVolume(0).
+///   4. Call play() IMMEDIATELY (sync, in init flow). Some Android codecs
+///      need play() before the texture is bound; calling it now means the
+///      first frame is already on its way by the time the widget mounts.
+///   5. Each time the user rotates the device (or on first build), we also
+///      kick play() inside the OrientationBuilder via a post-frame callback —
+///      catches the case where the codec held off until the surface was bound.
+///   6. A single listener restarts the video only when the platform reports
+///      it has actually finished, instead of polling.
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({super.key});
 
@@ -74,12 +76,6 @@ class _LoadingScreenState extends State<LoadingScreen>
     if (!mounted) return;
     setState(() => _videosReady = true);
 
-    // Start playback only once the texture is bound to a widget in the tree.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _portraitVideo?.play();
-      _landscapeVideo?.play();
-    });
-
     await Future<void>.delayed(_barDelay);
     if (!mounted) return;
     setState(() => _showBar = true);
@@ -111,14 +107,33 @@ class _LoadingScreenState extends State<LoadingScreen>
         'LoadingScreen: portrait dur=${portrait.value.duration} '
         'size=${portrait.value.size}',
       );
+      debugPrint(
+        'LoadingScreen: landscape dur=${landscape.value.duration} '
+        'size=${landscape.value.size}',
+      );
 
       portrait.setLooping(true);
       landscape.setLooping(true);
       portrait.setVolume(0);
       landscape.setVolume(0);
 
-      // Defensive loop fallback — fires only when the platform reports the
-      // video has actually completed and was not auto-restarted by setLooping.
+      // Kick playback right away. If the codec needs the texture bound first
+      // it will silently no-op; the OrientationBuilder kick below covers that.
+      try {
+        await portrait.play();
+        debugPrint(
+            'LoadingScreen: portrait play() OK isPlaying=${portrait.value.isPlaying}');
+      } catch (e) {
+        debugPrint('LoadingScreen: portrait play() failed: $e');
+      }
+      try {
+        await landscape.play();
+        debugPrint(
+            'LoadingScreen: landscape play() OK isPlaying=${landscape.value.isPlaying}');
+      } catch (e) {
+        debugPrint('LoadingScreen: landscape play() failed: $e');
+      }
+
       _portraitListener = () => _restartIfFinished(portrait);
       _landscapeListener = () => _restartIfFinished(landscape);
       portrait.addListener(_portraitListener!);
@@ -139,6 +154,17 @@ class _LoadingScreenState extends State<LoadingScreen>
     if (value.isPlaying) return;
     if (value.position < value.duration) return;
     c.seekTo(Duration.zero);
+    c.play();
+  }
+
+  /// Idempotent kick-start used when the surface (texture) is bound to the
+  /// widget tree. Some Android codecs only actually start delivering frames
+  /// once a Surface is attached, and play() called before that is a no-op.
+  void _kickIfNotPlaying(VideoPlayerController? c, String label) {
+    if (c == null) return;
+    if (!c.value.isInitialized) return;
+    if (c.value.isPlaying) return;
+    debugPrint('LoadingScreen: kick $label (post-bind play)');
     c.play();
   }
 
@@ -202,6 +228,17 @@ class _LoadingScreenState extends State<LoadingScreen>
           final isPortrait = orientation == Orientation.portrait;
           final controller =
               isPortrait ? _portraitVideo : _landscapeVideo;
+          // After the layout for this orientation has been laid out (and the
+          // video Texture has been bound), kick play() in case the codec was
+          // waiting for a surface.
+          if (controller != null && controller.value.isInitialized) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _kickIfNotPlaying(
+                controller,
+                isPortrait ? 'portrait' : 'landscape',
+              );
+            });
+          }
           return Stack(
             fit: StackFit.expand,
             children: [
@@ -273,7 +310,6 @@ class _LoadingBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    // Smaller bar in landscape so it can't possibly cover hero artwork.
     final width = isPortrait ? size.width * 0.7 : size.height * 0.4;
     return Image.asset(
       AppAssets.loadingBar(state),

@@ -19,28 +19,30 @@ class GameConstants {
   /// bounds" and counts as a fail.
   static const groundTopY = 7.5;
 
-  /// First "platform" the player stacks on. Tiny invisible body just below the
-  /// painted shop — visuals are owned entirely by [StartBg].
-  static const startBuildingTopY = 5.5;
-  static const startBuildingWidth = 3.2;
-  static const startBuildingHeight = 2.0;
+  /// First "platform" the player stacks on — the painted starter shop. The
+  /// physics body (and the rendered sprite) match these dimensions.
+  static const startBuildingTopY = 5.1;
+  static const startBuildingWidth = 2.6;
+  static const startBuildingHeight = 2.4;
 
   /// Block dimensions. The sprite is rendered at exactly these dimensions so
-  /// stacked blocks line up edge-to-edge with no overhang/overlap.
-  static const blockWidth = 3.2;
-  static const blockHeight = 1.9;
+  /// stacked blocks line up edge-to-edge with no overhang/overlap. Aspect
+  /// (~1.15) is intentionally close to the natural aspect of the source PNGs
+  /// (0.85-1.18) to minimise visible squashing.
+  static const blockWidth = 3.0;
+  static const blockHeight = 2.6;
 
   /// Pendulum geometry — chain pivots above the tower and swings the block in
   /// a real arc (not a flat slide).
-  static const hookChainLength = 4.0;
+  static const hookChainLength = 5.0;
 
   /// Resting (centred) gap between the bottom of the swinging block and the
   /// current top of the tower.
-  static const hookBlockOffsetAboveTop = 1.6;
+  static const hookBlockOffsetAboveTop = 1.0;
 
   /// Maximum swing angle of the pendulum in radians (~25 degrees). Translates
-  /// to a horizontal amplitude of `chainLength * sin(maxAngle)` ≈ 1.7 m.
-  static const hookMaxAngle = 0.45;
+  /// to a horizontal amplitude of `chainLength * sin(maxAngle)` ≈ 2.0 m.
+  static const hookMaxAngle = 0.42;
 
   /// Initial half-period of the swing (seconds for a one-way swing). Higher
   /// = slower / smoother.
@@ -66,7 +68,7 @@ class GameConstants {
 
   /// Minimum X-overlap (in meters) between the new block and the previous
   /// tower top required to keep playing. Less overlap == failed placement.
-  static const minOverlapToCount = 0.85;
+  static const minOverlapToCount = 1.0;
 
   /// Camera follows the tower top. The top stays this many meters below the
   /// camera centre — leaves room for the hook above.

@@ -10,16 +10,24 @@ import '../game_constants.dart';
 
 /// The crane hook + the block currently being teased above the tower.
 ///
-/// The whole assembly (block + V-shaped chains + hook sprite + crane line)
-/// behaves as a single rigid pendulum hanging from a virtual pivot above the
-/// tower. The pivot is fixed in world space (a chain-length above the
-/// resting block) and the entire assembly rotates around it, so the block
-/// traces a true left-right arc — slow at the extremes, fast through the
-/// centre — and visibly rises a touch at the edges, just like a real swing.
+/// The whole assembly (chain + hook sprite + block) behaves as a single rigid
+/// pendulum hanging from a virtual pivot above the tower. The pivot is fixed
+/// in world space (a chain-length above the resting block) and the entire
+/// assembly rotates around it, so the block traces a true left-right arc —
+/// slow at the extremes, fast through the centre — and visibly rises a touch
+/// at the edges, just like a real swing.
 ///
-/// Visuals match the screenshot reference: a single crane wire goes from off
-/// screen down to the hook, then two parallel chains diverge from the hook to
-/// the top corners of the block (forming a V).
+/// Visual structure (matches the reference screenshot):
+///   1. A single dark chain line going from far above the pivot down to the
+///      hook sprite, rotated with the swing.
+///   2. The `hook_asset.webp` sprite (a tall vertical chain+hook image)
+///      rendered between the pivot and the block, also rotated.
+///   3. The block sprite rendered at exact body dimensions, attached just
+///      below the hook.
+///
+/// Block image cache: all six skin sprites are loaded once in [onLoad] so
+/// [attachNewBlock] is synchronous — the next block appears on the same frame
+/// as the round transitions from `falling` back to `swinging`.
 class Hook extends PositionComponent {
   Hook({required this.skinIndexProvider}) : super(priority: 10);
 
@@ -27,6 +35,7 @@ class Hook extends PositionComponent {
   final int Function() skinIndexProvider;
 
   late ui.Image _hookImage;
+  final Map<int, ui.Image> _blockImages = {};
   late ui.Image _blockImage;
   int _currentSkin = 1;
 
@@ -83,8 +92,12 @@ class Hook extends PositionComponent {
   @override
   Future<void> onLoad() async {
     _hookImage = await Flame.images.load(AppAssets.hook);
+    // Pre-load every skin so attaching a new block is instantaneous.
+    for (var i = 1; i <= 6; i++) {
+      _blockImages[i] = await Flame.images.load(AppAssets.block(i));
+    }
     _currentSkin = skinIndexProvider();
-    _blockImage = await Flame.images.load(AppAssets.block(_currentSkin));
+    _blockImage = _blockImages[_currentSkin]!;
   }
 
   /// Detach the block from the hook (drop). The world will create a real
@@ -93,9 +106,11 @@ class Hook extends PositionComponent {
     _hasBlock = false;
   }
 
-  Future<void> attachNewBlock() async {
+  /// Synchronously snap the next block onto the hook. Safe to call from
+  /// [TowerWorld.update] — no awaits, no allocations besides a map lookup.
+  void attachNewBlock() {
     _currentSkin = skinIndexProvider();
-    _blockImage = await Flame.images.load(AppAssets.block(_currentSkin));
+    _blockImage = _blockImages[_currentSkin] ?? _blockImage;
     _hasBlock = true;
   }
 
@@ -116,59 +131,45 @@ class Hook extends PositionComponent {
     final dirX = math.sin(angle);
     final dirY = math.cos(angle);
 
-    // Pivot — virtual point above tower; renders as the off-screen end of the
-    // crane wire.
+    // Pivot — virtual point above tower; the chain extends past it off-screen.
     final pivotX = 0.0;
     final pivotY = _pivotY;
 
     final blockCx = _blockCenterX;
     final blockCy = _blockCenterY;
 
-    // The visible hook sprite sits on the chain just above the block.
-    const hookHeight = 1.0;
-    final hookAspect = _hookImage.width / _hookImage.height;
-    final hookWidth = hookHeight * hookAspect;
-    final hookOffset = GameConstants.blockHeight / 2 + hookHeight / 2 + 0.2;
-    final hookCx = blockCx - dirX * hookOffset;
-    final hookCy = blockCy - dirY * hookOffset;
+    // hook_asset: tall vertical sprite (121x504, aspect 0.24). Render it
+    // covering most of the chain length so the entire "rope from above" is the
+    // sprite itself. We pad above the pivot by 12 m so the chain extends well
+    // beyond the top of the screen on any device.
+    const aboveExtent = 12.0;
+    final hookSpriteLength = GameConstants.hookChainLength + aboveExtent;
+    const hookSpriteWidth = 0.7;
+    final hookCenterDistance =
+        GameConstants.hookChainLength - hookSpriteLength / 2;
+    final hookCenterX = pivotX + dirX * hookCenterDistance;
+    final hookCenterY = pivotY + dirY * hookCenterDistance;
 
+    // 1) Backup chain stroke (drawn under the sprite). Even if the sprite has
+    //    transparent regions or doesn't extend high enough, the player still
+    //    sees a continuous chain.
     final chainPaint = Paint()
       ..color = const Color(0xFF1F1F1F)
       ..strokeWidth = 0.10
       ..strokeCap = StrokeCap.round;
-
-    // 1) Crane wire — a single thicker line from the pivot (and beyond, off
-    //    the top of the screen) down to the hook.
-    final aboveX = pivotX - dirX * 18;
-    final aboveY = pivotY - dirY * 18;
+    final chainTopX = pivotX - dirX * aboveExtent;
+    final chainTopY = pivotY - dirY * aboveExtent;
+    final chainBottomX = blockCx - dirX * (GameConstants.blockHeight / 2);
+    final chainBottomY = blockCy - dirY * (GameConstants.blockHeight / 2);
     canvas.drawLine(
-      Offset(aboveX, aboveY),
-      Offset(hookCx, hookCy),
-      Paint()
-        ..color = const Color(0xFF1F1F1F)
-        ..strokeWidth = 0.13
-        ..strokeCap = StrokeCap.round,
+      Offset(chainTopX, chainTopY),
+      Offset(chainBottomX, chainBottomY),
+      chainPaint,
     );
 
-    // 2) Two diverging chains from the hook to the top corners of the block.
-    if (_hasBlock) {
-      final hw = GameConstants.blockWidth * 0.42;
-      final hh = GameConstants.blockHeight / 2;
-      final cosA = math.cos(angle);
-      final sinA = math.sin(angle);
-      final tlX = blockCx + (-hw) * cosA - (-hh) * sinA;
-      final tlY = blockCy + (-hw) * sinA + (-hh) * cosA;
-      final trX = blockCx + (hw) * cosA - (-hh) * sinA;
-      final trY = blockCy + (hw) * sinA + (-hh) * cosA;
-      canvas.drawLine(
-          Offset(hookCx, hookCy), Offset(tlX, tlY), chainPaint);
-      canvas.drawLine(
-          Offset(hookCx, hookCy), Offset(trX, trY), chainPaint);
-    }
-
-    // 3) Hook sprite (rotated to follow the swing).
+    // 2) Hook sprite (rotated to follow the swing).
     canvas.save();
-    canvas.translate(hookCx, hookCy);
+    canvas.translate(hookCenterX, hookCenterY);
     canvas.rotate(angle);
     canvas.drawImageRect(
       _hookImage,
@@ -180,14 +181,14 @@ class Hook extends PositionComponent {
       ),
       Rect.fromCenter(
         center: Offset.zero,
-        width: hookWidth,
-        height: hookHeight,
+        width: hookSpriteWidth,
+        height: hookSpriteLength,
       ),
       paint,
     );
     canvas.restore();
 
-    // 4) Block.
+    // 3) Block at the bottom, rendered exactly at body dimensions.
     if (_hasBlock) {
       canvas.save();
       canvas.translate(blockCx, blockCy);
