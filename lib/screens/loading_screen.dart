@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flame/flame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 
 import '../app/app_assets.dart';
@@ -188,6 +189,21 @@ class _LoadingScreenState extends State<LoadingScreen>
       } catch (e) {
         debugPrint('LoadingScreen: failed to preload $p: $e');
       }
+    }
+    // Preload Google Fonts referenced by AppTextStyles. Without this the very
+    // first frame of MainMenuScreen renders with the system fallback font and
+    // visibly snaps to Bangers/Fredoka a few hundred ms later.
+    try {
+      // Touching each style triggers a runtime fetch; pendingFonts() awaits
+      // every fetch currently in flight.
+      GoogleFonts.bangers();
+      GoogleFonts.fredoka();
+      await GoogleFonts.pendingFonts(<TextStyle>[
+        GoogleFonts.bangers(),
+        GoogleFonts.fredoka(),
+      ]);
+    } catch (e) {
+      debugPrint('LoadingScreen: Google Fonts preload failed: $e');
     }
   }
 

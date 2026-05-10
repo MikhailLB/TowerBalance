@@ -289,17 +289,18 @@ class _Hud extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            _RoundButton(
-              icon: Icons.speed_rounded,
-              onPressed: onUseSlowHook,
-              tint: onUseSlowHook == null
-                  ? AppColors.panel
-                  : AppColors.accent.withValues(alpha: 0.85),
-            ),
-            if (slowHooks > 0)
+        // Slow-hook button only appears when the player actually has boosts to
+        // spend. Otherwise the HUD shows a same-sized empty slot so the score
+        // pill stays centred.
+        if (slowHooks > 0)
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _RoundButton(
+                icon: Icons.speed_rounded,
+                onPressed: onUseSlowHook,
+                tint: AppColors.accent.withValues(alpha: 0.85),
+              ),
               Positioned(
                 right: -2,
                 top: -2,
@@ -319,8 +320,10 @@ class _Hud extends StatelessWidget {
                   ),
                 ),
               ),
-          ],
-        ),
+            ],
+          )
+        else
+          const SizedBox(width: 48, height: 48),
       ],
     );
   }
