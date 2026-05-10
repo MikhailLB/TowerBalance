@@ -1,0 +1,188 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../app/app_assets.dart';
+import '../app/app_theme.dart';
+import '../main.dart';
+import '../widgets/pixel_button.dart';
+import 'game_screen.dart';
+import 'shop_screen.dart';
+
+/// Main menu shown after the loading splash. Locks the device into portrait
+/// mode (gameplay is portrait-only).
+class MainMenuScreen extends StatefulWidget {
+  const MainMenuScreen({super.key});
+
+  @override
+  State<MainMenuScreen> createState() => _MainMenuScreenState();
+}
+
+class _MainMenuScreenState extends State<MainMenuScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _floatController;
+
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    _floatController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+    progress.addListener(_onProgressChanged);
+  }
+
+  void _onProgressChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    progress.removeListener(_onProgressChanged);
+    _floatController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startGame() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const GameScreen()),
+    );
+  }
+
+  Future<void> _openShop() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ShopScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    return Scaffold(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(AppAssets.startBg, fit: BoxFit.cover),
+          Align(
+            alignment: const Alignment(0, 0.55),
+            child: AnimatedBuilder(
+              animation: _floatController,
+              builder: (_, child) {
+                final t = _floatController.value;
+                return Transform.translate(
+                  offset: Offset(0, -8 + 8 * (1 - t)),
+                  child: child,
+                );
+              },
+              child: Image.asset(
+                AppAssets.startBuilding,
+                width: size.width * 0.9,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _TopBar(coins: progress.coins, highScore: progress.highScore),
+                  const Spacer(),
+                  Image.asset(
+                    AppAssets.logoName,
+                    width: size.width * 0.8,
+                    fit: BoxFit.contain,
+                  ),
+                  const Spacer(flex: 4),
+                  Column(
+                    children: [
+                      PixelButton(
+                        label: 'Play',
+                        onPressed: _startGame,
+                        width: 240,
+                        height: 78,
+                        fontSize: 28,
+                      ),
+                      const SizedBox(height: 16),
+                      PixelButton(
+                        label: 'Shop',
+                        onPressed: _openShop,
+                        width: 200,
+                        height: 64,
+                        fontSize: 22,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.coins, required this.highScore});
+
+  final int coins;
+  final int highScore;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _Pill(
+          icon: Icons.emoji_events_rounded,
+          iconColor: AppColors.accent,
+          label: 'Best $highScore',
+        ),
+        _Pill(
+          icon: Icons.monetization_on_rounded,
+          iconColor: AppColors.accent,
+          label: '$coins',
+        ),
+      ],
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.black26),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: iconColor, size: 22),
+          const SizedBox(width: 6),
+          Text(label, style: AppTextStyles.button(size: 18)),
+        ],
+      ),
+    );
+  }
+}
