@@ -22,6 +22,14 @@ Future<void> main() async {
   final storage = await StorageService.create();
   progress = GameProgress(storage);
 
+  // Debug grant: top up to at least 10 000 coins on every launch so the shop
+  // can be exercised. Idempotent — only adds the delta needed to reach the
+  // floor, never goes above it on subsequent launches.
+  const debugCoinFloor = 10000;
+  if (progress.coins < debugCoinFloor) {
+    await progress.addCoins(debugCoinFloor - progress.coins);
+  }
+
   runApp(const TowerBalanceApp());
 }
 

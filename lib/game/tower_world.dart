@@ -152,6 +152,9 @@ class TowerWorld extends Forge2DWorld with HasGameReference<TowerGame> {
     }
     currentTopY = top;
     hook.topY = currentTopY;
+    // Push the camera centre into the hook so it can anchor itself to the top
+    // of the viewport instead of moving with the tower top.
+    hook.cameraCenterY = game.camera.viewfinder.position.y;
 
     if (status.value == TowerGameStatus.falling && _activeBlock != null) {
       _evaluateFalling(dt);

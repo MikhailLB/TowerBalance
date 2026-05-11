@@ -10,23 +10,27 @@ import '../game_constants.dart';
 
 /// The crane hook + the block currently being teased above the tower.
 ///
-/// Movement: pure horizontal slide. The hook moves left/right on a sine wave
-/// (`x = sin(phase) * amplitude`) at a fixed Y. Nothing rotates — the hook
-/// sprite, the block, and the chains all stay upright. This matches the
-/// reference design (the hook ladders straight back and forth above the
-/// tower, no pendulum arc).
+/// Movement:
+///   * The hook **slides horizontally** above the playfield. No rotation, no
+///     pendulum arc.
+///   * The hook is **anchored to the top of the camera viewport**, NOT to the
+///     tower. As the tower grows and the camera pans up, the hook follows the
+///     camera so it always stays at the top of the screen — it never appears
+///     to "fall" with the tower.
 ///
-/// Visual structure (top to bottom):
-///   1. The `hook_asset.webp` sprite — drawn upright, its built-in upward
-///      ropes vanishing off the top of the screen.
-///   2. Two diagonal chain lines forming an inverted V (Λ) from the bottom of
-///      the hook sprite down to the top-left and top-right corners of the
-///      block.
-///   3. The block sprite, hanging directly below the hook, upright.
+/// Block geometry:
+///   * The block hangs from the hook via two diagonal chains forming an
+///     inverted V (Λ).
+///   * The block's vertical position is anchored to the current tower top
+///     ([topY] - [GameConstants.hookBlockOffsetAboveTop] - blockHeight/2),
+///     same as before.
+///   * Because the hook is at the top of the camera and the block is at a
+///     fixed offset above the tower top, the chain length on screen stays
+///     visually constant (camera always centres on the tower top region).
 ///
 /// Block image cache: all six skin sprites are loaded once in [onLoad] so
-/// [attachNewBlock] is synchronous — the next block appears on the same frame
-/// as the round transitions from `falling` back to `swinging`.
+/// [attachNewBlock] is synchronous — the next block appears on the same
+/// frame as the round transitions from `falling` back to `swinging`.
 class Hook extends PositionComponent {
   Hook({required this.skinIndexProvider}) : super(priority: 10);
 
@@ -38,8 +42,12 @@ class Hook extends PositionComponent {
   late ui.Image _blockImage;
   int _currentSkin = 1;
 
-  /// Current top-of-tower Y (used to position the hook above it).
+  /// Current top-of-tower Y. Drives the block's vertical position.
   double topY = GameConstants.startBuildingTopY;
+
+  /// World-space Y of the camera centre. Pushed from [TowerWorld.update] each
+  /// frame; drives the hook's vertical position.
+  double cameraCenterY = 0;
 
   /// Current half period (seconds) — controls slide speed.
   double halfPeriod = GameConstants.hookInitialHalfPeriod;
@@ -57,8 +65,7 @@ class Hook extends PositionComponent {
   double get currentX =>
       math.sin(_phase) * GameConstants.hookAmplitude;
 
-  /// World-space Y of the block centre. Fixed — moves only when the tower
-  /// grows taller (which lifts [topY]).
+  /// World-space Y of the block centre (anchored to the tower).
   double get currentY =>
       topY -
       GameConstants.hookBlockOffsetAboveTop -
@@ -115,13 +122,16 @@ class Hook extends PositionComponent {
     final blockCy = currentY;
     final blockTopY = blockCy - GameConstants.blockHeight / 2;
 
-    // Hook sprite geometry — upright, sitting above the block with the chain
-    // gap reserved between its bottom and the block top.
+    // Hook is anchored near the TOP of the camera viewport. Its centre sits
+    // [hookScreenAnchor] meters above the camera centre, putting the bottom
+    // of the hook just below the top of the screen with the upward chains in
+    // the sprite extending off the visible area.
     const hookSpriteHeight = GameConstants.hookSpriteHeight;
     final hookAspect = _hookImage.width / _hookImage.height; // 0.24
     final hookSpriteWidth = hookSpriteHeight * hookAspect;
-    final hookBottomY = blockTopY - GameConstants.hookChainHeight;
-    final hookCenterY = hookBottomY - hookSpriteHeight / 2;
+    final hookCenterY =
+        cameraCenterY - GameConstants.hookScreenAnchor;
+    final hookBottomY = hookCenterY + hookSpriteHeight / 2;
 
     // 1) Hook sprite (upright, no rotation). Drawn first so the chains in
     //    step 2 visually run UNDER the painted hook curl.
@@ -148,7 +158,7 @@ class Hook extends PositionComponent {
       final attachRightX = cx + GameConstants.blockWidth / 2 - inset;
       final chainPaint = Paint()
         ..color = const Color(0xFF1F1F1F)
-        ..strokeWidth = 0.10
+        ..strokeWidth = 0.12
         ..strokeCap = StrokeCap.round;
       canvas.drawLine(
         Offset(cx, hookBottomY),

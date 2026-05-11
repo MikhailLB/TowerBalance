@@ -42,12 +42,16 @@ class GameConstants {
   /// top of the tower.
   static const hookBlockOffsetAboveTop = 1.0;
 
-  /// Vertical length of the inverted-V chains that connect the hook bottom to
-  /// the top corners of the block.
-  static const hookChainHeight = 1.3;
+  /// Visible hook sprite height (its width is computed from the source aspect
+  /// 0.24, giving a ~1.2 m wide hook). Big enough to read clearly at the top
+  /// of the screen with the built-in upward ropes still extending off-frame.
+  static const hookSpriteHeight = 5.0;
 
-  /// Visible hook sprite height (its width is computed from the source aspect).
-  static const hookSpriteHeight = 2.6;
+  /// Hook centre Y is positioned this many meters ABOVE the camera centre.
+  /// With worldHeight=16 the camera covers ±8 m vertically, so an anchor of
+  /// 5.5 puts the hook centre 1/8 of the way down from the top of the screen
+  /// (its top extends ~1.5 m off-frame, exactly where the upward ropes go).
+  static const hookScreenAnchor = 5.5;
 
   /// Initial half-period of the slide (seconds for one-way traversal). Higher
   /// = slower / smoother.
