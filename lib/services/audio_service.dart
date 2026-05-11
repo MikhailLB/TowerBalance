@@ -1,6 +1,7 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 
 import '../state/game_progress.dart';
 
@@ -25,7 +26,7 @@ enum Bgm { menu, gameplay }
 /// Initialise once in `main()` after [GameProgress] exists, then call from
 /// anywhere via [AudioService.instance]. Listens to the progress object so
 /// volume/mute changes apply immediately without restarting tracks.
-class AudioService {
+class AudioService with WidgetsBindingObserver {
   AudioService._(this._progress);
 
   static AudioService? _instance;
@@ -45,6 +46,11 @@ class AudioService {
   final GameProgress _progress;
   final AudioPlayer _bgm = AudioPlayer(playerId: 'tower_balance_bgm');
   Bgm? _currentBgm;
+
+  /// True while the OS reports the app is in the foreground. Tracked by
+  /// [didChangeAppLifecycleState] so we can suppress BGM resume requests that
+  /// would otherwise restart playback while the user is in another app.
+  bool _appInForeground = true;
 
   /// Initialise the global audio system. Pre-loads the SFX clips so they
   /// fire with no perceptible latency. Safe to call multiple times.
@@ -99,17 +105,33 @@ class AudioService {
       debugPrint('AudioService: bgm setAudioContext failed: $e');
     }
     progress.addListener(svc._onProgressChanged);
+    WidgetsBinding.instance.addObserver(svc);
   }
 
   void _onProgressChanged() {
     // Apply music volume / mute changes live.
-    if (_progress.musicEnabled) {
+    if (_progress.musicEnabled && _appInForeground) {
       _bgm.setVolume(_progress.musicVolume);
       if (_currentBgm != null && _bgm.state != PlayerState.playing) {
         _bgm.resume();
       }
     } else {
       _bgm.pause();
+    }
+  }
+
+  /// Pauses BGM when the app is backgrounded / hidden / inactive and resumes
+  /// it when the player returns. Without this the looping music keeps playing
+  /// in the system mixer even after the user has switched away.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final foreground = state == AppLifecycleState.resumed;
+    if (foreground == _appInForeground) return;
+    _appInForeground = foreground;
+    if (!foreground) {
+      _bgm.pause();
+    } else if (_progress.musicEnabled && _currentBgm != null) {
+      _bgm.resume();
     }
   }
 
@@ -124,7 +146,7 @@ class AudioService {
   Future<void> playBgm(Bgm bgm) async {
     if (_currentBgm == bgm && _bgm.state == PlayerState.playing) return;
     _currentBgm = bgm;
-    if (!_progress.musicEnabled) return;
+    if (!_progress.musicEnabled || !_appInForeground) return;
     try {
       await _bgm.stop();
       await _bgm.setVolume(_progress.musicVolume);

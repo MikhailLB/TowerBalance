@@ -58,25 +58,25 @@ class TowerBlock extends BodyComponent with ContactCallbacks {
     return body;
   }
 
-  /// Wakes a short haptic tick whenever this block touches another block. We
-  /// only fire on the FIRST significant impact (impulse > threshold) so the
-  /// device doesn't buzz constantly while blocks settle on each other.
-  bool _impactBuzzed = false;
+  /// Plays the impact SFX + a short haptic tick whenever this block touches
+  /// another block (or the start building / ground). We only fire on the
+  /// FIRST significant impact (impulse > threshold) and gate further fires
+  /// behind a short cooldown so the device doesn't buzz / click 60 times a
+  /// second while blocks settle on each other.
+  bool _impactCooldown = false;
 
   @override
   void postSolve(Object other, Contact contact, ContactImpulse impulse) {
-    if (_impactBuzzed) return;
-    if (other is! TowerBlock) return;
+    if (_impactCooldown) return;
     final maxImpulse = impulse.normalImpulses.isEmpty
         ? 0.0
         : impulse.normalImpulses.reduce((a, b) => a > b ? a : b);
     if (maxImpulse < 0.6) return; // ignore tiny resting jitters
-    _impactBuzzed = true;
+    _impactCooldown = true;
+    AudioService.instance.playSfx(Sfx.blockFall);
     AudioService.instance.vibrate();
-    // Re-arm after a short cooldown so a long bouncy stack still gets a tick
-    // for each meaningful impact, just not 60 per second.
-    Future<void>.delayed(const Duration(milliseconds: 250), () {
-      _impactBuzzed = false;
+    Future<void>.delayed(const Duration(milliseconds: 220), () {
+      _impactCooldown = false;
     });
   }
 

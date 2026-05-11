@@ -228,9 +228,9 @@ class TowerWorld extends Forge2DWorld with HasGameReference<TowerGame> {
     _settleTimer = 0;
     _fallTimer = 0;
 
-    // Successful placement — short thunk + light haptic.
-    AudioService.instance.playSfx(Sfx.blockFall);
-    AudioService.instance.vibrate();
+    // Impact SFX + a small per-impact tick are emitted from
+    // [TowerBlock.postSolve] the moment the block actually touches the tower.
+    // Here we only mark the placement as successful — no extra sound.
 
     // Attach a fresh block to the hook for the next swing.
     hook.attachNewBlock();
