@@ -52,8 +52,52 @@ class AudioService {
     if (_instance != null) return;
     final svc = AudioService._(progress);
     _instance = svc;
+
+    // Configure the global audio context so SFX playback does NOT request
+    // audio focus on Android. Without this, every new short-lived SFX player
+    // grabs focus and pauses the looping BGM player ("music stops on every
+    // tap / block fall"). `gainTransientMayDuck` would lower the music while
+    // SFX plays, which still causes the dip — `none` lets them mix freely.
+    try {
+      await AudioPlayer.global.setAudioContext(
+        AudioContext(
+          android: const AudioContextAndroid(
+            isSpeakerphoneOn: false,
+            stayAwake: false,
+            contentType: AndroidContentType.music,
+            usageType: AndroidUsageType.media,
+            audioFocus: AndroidAudioFocus.none,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.ambient,
+            options: const {AVAudioSessionOptions.mixWithOthers},
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('AudioService: setAudioContext failed: $e');
+    }
+
     await svc._bgm.setReleaseMode(ReleaseMode.loop);
     await svc._bgm.setVolume(progress.musicVolume);
+    // The BGM player was constructed before setAudioContext above ran — push
+    // the same focus-free context onto it so the looping music keeps playing
+    // while SFX players come and go.
+    try {
+      await svc._bgm.setAudioContext(
+        AudioContext(
+          android: const AudioContextAndroid(
+            isSpeakerphoneOn: false,
+            stayAwake: false,
+            contentType: AndroidContentType.music,
+            usageType: AndroidUsageType.media,
+            audioFocus: AndroidAudioFocus.none,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('AudioService: bgm setAudioContext failed: $e');
+    }
     progress.addListener(svc._onProgressChanged);
   }
 

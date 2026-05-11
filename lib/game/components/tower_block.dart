@@ -5,11 +5,12 @@ import 'package:flame_forge2d/flame_forge2d.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/app_assets.dart';
+import '../../services/audio_service.dart';
 import '../game_constants.dart';
 
 /// A single dynamic tower block. Spawned by the [Hook] and inserted into the
 /// physics world as soon as the player taps to drop it.
-class TowerBlock extends BodyComponent {
+class TowerBlock extends BodyComponent with ContactCallbacks {
   TowerBlock({
     required this.skinIndex,
     required this.spawnPosition,
@@ -55,6 +56,28 @@ class TowerBlock extends BodyComponent {
       restitution: 0.02,
     ));
     return body;
+  }
+
+  /// Wakes a short haptic tick whenever this block touches another block. We
+  /// only fire on the FIRST significant impact (impulse > threshold) so the
+  /// device doesn't buzz constantly while blocks settle on each other.
+  bool _impactBuzzed = false;
+
+  @override
+  void postSolve(Object other, Contact contact, ContactImpulse impulse) {
+    if (_impactBuzzed) return;
+    if (other is! TowerBlock) return;
+    final maxImpulse = impulse.normalImpulses.isEmpty
+        ? 0.0
+        : impulse.normalImpulses.reduce((a, b) => a > b ? a : b);
+    if (maxImpulse < 0.6) return; // ignore tiny resting jitters
+    _impactBuzzed = true;
+    AudioService.instance.vibrate();
+    // Re-arm after a short cooldown so a long bouncy stack still gets a tick
+    // for each meaningful impact, just not 60 per second.
+    Future<void>.delayed(const Duration(milliseconds: 250), () {
+      _impactBuzzed = false;
+    });
   }
 
   @override

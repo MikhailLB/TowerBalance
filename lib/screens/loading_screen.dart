@@ -270,11 +270,11 @@ class _LoadingScreenState extends State<LoadingScreen>
                 Positioned(
                   left: 0,
                   right: 0,
-                  // Sit just above the very bottom edge — a small gap below
-                  // the bar avoids touching the system gesture area while
-                  // keeping the bar low enough not to cover the artwork.
-                  bottom: MediaQuery.of(context).padding.bottom +
-                      (isPortrait ? 16 : 10),
+                  // Glue the bar to the very bottom edge of the screen so it
+                  // never collides with the centre/lower text baked into the
+                  // splash video. Safe-area is intentionally ignored here —
+                  // the bar art has its own padding around the pixels.
+                  bottom: isPortrait ? 4 : 2,
                   child: Center(
                     child: AnimatedBuilder(
                       animation: _progressController,
