@@ -48,10 +48,12 @@ class GameConstants {
   static const hookSpriteHeight = 5.0;
 
   /// Hook centre Y is positioned this many meters ABOVE the camera centre.
-  /// With worldHeight=16 the camera covers ±8 m vertically, so an anchor of
-  /// 5.5 puts the hook centre 1/8 of the way down from the top of the screen
-  /// (its top extends ~1.5 m off-frame, exactly where the upward ropes go).
-  static const hookScreenAnchor = 5.5;
+  /// With worldHeight=16 the camera covers ±8 m vertically; with anchor 7.5
+  /// the hook centre sits 0.5 m ABOVE the top of the visible viewport, so
+  /// the upper half of the sprite (and the painted upward ropes) is fully
+  /// off-screen and only the bottom hook curl + a bit of chain is visible —
+  /// reads as a giant crane reaching down from above the screen.
+  static const hookScreenAnchor = 7.5;
 
   /// Initial half-period of the slide (seconds for one-way traversal). Higher
   /// = slower / smoother.

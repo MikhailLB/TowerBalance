@@ -47,7 +47,9 @@ class _LoadingScreenState extends State<LoadingScreen>
   late final AnimationController _progressController;
 
   static const _minDuration = Duration(milliseconds: 6000);
-  static const _barDelay = Duration(milliseconds: 400);
+  // Bar appears almost as soon as the splash background does — earlier feedback
+  // was that the long delay made it feel like the splash had stalled.
+  static const _barDelay = Duration(milliseconds: 120);
   static const _barDuration = Duration(milliseconds: 4500);
 
   @override
@@ -268,8 +270,11 @@ class _LoadingScreenState extends State<LoadingScreen>
                 Positioned(
                   left: 0,
                   right: 0,
+                  // Push the bar as close to the bottom edge as possible in
+                  // landscape (where vertical room is tight), while keeping a
+                  // comfortable margin in portrait.
                   bottom: MediaQuery.of(context).padding.bottom +
-                      (isPortrait ? 56 : 14),
+                      (isPortrait ? 56 : 4),
                   child: Center(
                     child: AnimatedBuilder(
                       animation: _progressController,
