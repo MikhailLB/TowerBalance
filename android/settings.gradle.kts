@@ -21,6 +21,10 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "8.7.2" apply false
     id("org.jetbrains.kotlin.android") version "2.1.21" apply false
+    // Required for Firebase Cloud Messaging + App Check (gray flow).
+    // The plugin is applied in app/build.gradle.kts only when
+    // google-services.json is present, so the build stays green without it.
+    id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
 include(":app")
