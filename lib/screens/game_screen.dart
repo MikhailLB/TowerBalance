@@ -27,6 +27,12 @@ class _GameScreenState extends State<GameScreen> {
   late final math.Random _rand = math.Random();
   bool _scoreSubmitted = false;
 
+  /// Counter used by [_pickSkin] when the player has the rotation mode
+  /// enabled (selectedSkin == 0). Cycles through owned skins in order so each
+  /// new block in a single round uses the next skin — visible alternation
+  /// instead of random repeats.
+  int _rotationIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +50,10 @@ class _GameScreenState extends State<GameScreen> {
 
   void _spawnGame({required bool useSlowHook}) {
     _scoreSubmitted = false;
+    // Reset rotation each round, with a small random offset so consecutive
+    // games don't always start with the same skin.
+    final owned = progress.ownedSkins;
+    _rotationIndex = owned.isEmpty ? 0 : _rand.nextInt(owned.length);
     _game = TowerGame(
       skinPicker: _pickSkin,
       startWithSlowHook: useSlowHook,
@@ -53,9 +63,15 @@ class _GameScreenState extends State<GameScreen> {
   int _pickSkin() {
     final selected = progress.selectedSkin;
     final owned = progress.ownedSkins;
-    if (selected != 0 && owned.contains(selected)) return selected;
     if (owned.isEmpty) return 1;
-    return owned[_rand.nextInt(owned.length)];
+    // Specific skin selected: always use it.
+    if (selected != 0 && owned.contains(selected)) return selected;
+    // Rotation mode (selectedSkin == 0): cycle through owned skins in order so
+    // every new block in the game uses the next skin. With multiple skins
+    // owned the player visibly sees the tower alternate between them.
+    final skin = owned[_rotationIndex % owned.length];
+    _rotationIndex++;
+    return skin;
   }
 
   Future<void> _onPause() async {

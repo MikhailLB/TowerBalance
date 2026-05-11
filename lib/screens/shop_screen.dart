@@ -36,6 +36,8 @@ class _ShopScreenState extends State<ShopScreen> {
 
   Future<void> _buySkin(int skin) async {
     if (progress.ownedSkins.contains(skin)) {
+      // Tapping an owned skin equips just that one (single-skin mode). Tap
+      // "Random" below to switch back to rotation.
       await progress.setSelectedSkin(skin);
       return;
     }
@@ -45,7 +47,10 @@ class _ShopScreenState extends State<ShopScreen> {
       return;
     }
     await progress.unlockSkin(skin);
-    await progress.setSelectedSkin(skin);
+    // After buying a new skin, default to rotation mode so every owned skin
+    // (the new one included) takes part in the next game. The player can
+    // always tap a specific skin afterwards to lock onto it.
+    await progress.setSelectedSkin(0);
   }
 
   Future<void> _buySlowHook() async {

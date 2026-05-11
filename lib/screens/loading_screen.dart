@@ -270,11 +270,11 @@ class _LoadingScreenState extends State<LoadingScreen>
                 Positioned(
                   left: 0,
                   right: 0,
-                  // Push the bar as close to the bottom edge as possible in
-                  // landscape (where vertical room is tight), while keeping a
-                  // comfortable margin in portrait.
+                  // Sit just above the very bottom edge — a small gap below
+                  // the bar avoids touching the system gesture area while
+                  // keeping the bar low enough not to cover the artwork.
                   bottom: MediaQuery.of(context).padding.bottom +
-                      (isPortrait ? 56 : 4),
+                      (isPortrait ? 16 : 10),
                   child: Center(
                     child: AnimatedBuilder(
                       animation: _progressController,
