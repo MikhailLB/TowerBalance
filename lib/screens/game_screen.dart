@@ -7,6 +7,7 @@ import '../app/app_theme.dart';
 import '../game/game_status.dart';
 import '../game/tower_game.dart';
 import '../main.dart';
+import '../services/audio_service.dart';
 import '../widgets/pixel_button.dart';
 
 /// Hosts the [TowerGame] inside a [GameWidget] and adds Flutter-side overlays
@@ -46,6 +47,7 @@ class _GameScreenState extends State<GameScreen> {
         _spawnGame(useSlowHook: false);
       });
     });
+    AudioService.instance.playBgm(Bgm.gameplay);
   }
 
   void _spawnGame({required bool useSlowHook}) {
@@ -75,14 +77,17 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _onPause() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
     _game?.setPaused(true);
   }
 
   void _onResume() {
+    AudioService.instance.playSfx(Sfx.buttonClick);
     _game?.setPaused(false);
   }
 
   Future<void> _onUseSlowHook() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
     final granted = await progress.consumeSlowHook();
     if (!granted) return;
     setState(() {
@@ -91,6 +96,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _onUseSecondChance() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
     final granted = await progress.consumeSecondChance();
     if (!granted) return;
     _game?.requestSecondChance();
@@ -98,12 +104,14 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _onRestart() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
     setState(() {
       _spawnGame(useSlowHook: false);
     });
   }
 
   Future<void> _onExit() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
     if (mounted) Navigator.of(context).pop();
   }
 

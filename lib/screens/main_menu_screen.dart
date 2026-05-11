@@ -6,8 +6,10 @@ import 'package:flutter/services.dart';
 import '../app/app_assets.dart';
 import '../app/app_theme.dart';
 import '../main.dart';
+import '../services/audio_service.dart';
 import '../widgets/pixel_button.dart';
 import 'game_screen.dart';
+import 'settings_screen.dart';
 import 'shop_screen.dart';
 
 /// Main menu shown after the loading splash. Locks the device into portrait
@@ -35,6 +37,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       duration: const Duration(seconds: 3),
     )..repeat(reverse: true);
     progress.addListener(_onProgressChanged);
+    AudioService.instance.playBgm(Bgm.menu);
   }
 
   void _onProgressChanged() {
@@ -49,14 +52,25 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   }
 
   Future<void> _startGame() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const GameScreen()),
     );
+    // Returning from gameplay — switch back to menu music.
+    if (mounted) AudioService.instance.playBgm(Bgm.menu);
   }
 
   Future<void> _openShop() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const ShopScreen()),
+    );
+  }
+
+  Future<void> _openSettings() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
     );
   }
 
@@ -92,7 +106,11 @@ class _MainMenuScreenState extends State<MainMenuScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _TopBar(coins: progress.coins, highScore: progress.highScore),
+                  _TopBar(
+                    coins: progress.coins,
+                    highScore: progress.highScore,
+                    onSettings: _openSettings,
+                  ),
                   const Spacer(),
                   Image.asset(
                     AppAssets.logoName,
@@ -131,10 +149,15 @@ class _MainMenuScreenState extends State<MainMenuScreen>
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.coins, required this.highScore});
+  const _TopBar({
+    required this.coins,
+    required this.highScore,
+    required this.onSettings,
+  });
 
   final int coins;
   final int highScore;
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -146,10 +169,29 @@ class _TopBar extends StatelessWidget {
           iconColor: AppColors.accent,
           label: 'Best $highScore',
         ),
-        _Pill(
-          icon: Icons.monetization_on_rounded,
-          iconColor: AppColors.accent,
-          label: '$coins',
+        Row(
+          children: [
+            _Pill(
+              icon: Icons.monetization_on_rounded,
+              iconColor: AppColors.accent,
+              label: '$coins',
+            ),
+            const SizedBox(width: 8),
+            Material(
+              color: AppColors.panel,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onSettings,
+                child: const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(Icons.settings_rounded,
+                      color: AppColors.text, size: 24),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

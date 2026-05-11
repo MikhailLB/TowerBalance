@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Persistent storage for player progress: coins, high score, owned skins,
-/// equipped skin, and consumable boosts.
+/// equipped skin, consumable boosts, and audio/haptic preferences.
 class StorageService {
   StorageService._(this._prefs);
 
@@ -12,6 +12,10 @@ class StorageService {
   static const _kBoostSlowHook = 'boost_slow_hook';
   static const _kBoostSecondChance = 'boost_second_chance';
   static const _kSoundEnabled = 'sound_enabled';
+  static const _kMusicEnabled = 'music_enabled';
+  static const _kVibrationEnabled = 'vibration_enabled';
+  static const _kMusicVolume = 'music_volume';
+  static const _kSfxVolume = 'sfx_volume';
 
   final SharedPreferences _prefs;
 
@@ -24,14 +28,25 @@ class StorageService {
 
   Future<void> _seedDefaults() async {
     if (!_prefs.containsKey(_kOwnedSkins)) {
-      // First skin is unlocked by default.
       await _prefs.setStringList(_kOwnedSkins, ['1']);
     }
     if (!_prefs.containsKey(_kSelectedSkin)) {
-      await _prefs.setInt(_kSelectedSkin, 0); // 0 = random from owned
+      await _prefs.setInt(_kSelectedSkin, 0);
     }
     if (!_prefs.containsKey(_kSoundEnabled)) {
       await _prefs.setBool(_kSoundEnabled, true);
+    }
+    if (!_prefs.containsKey(_kMusicEnabled)) {
+      await _prefs.setBool(_kMusicEnabled, true);
+    }
+    if (!_prefs.containsKey(_kVibrationEnabled)) {
+      await _prefs.setBool(_kVibrationEnabled, true);
+    }
+    if (!_prefs.containsKey(_kMusicVolume)) {
+      await _prefs.setDouble(_kMusicVolume, 0.6);
+    }
+    if (!_prefs.containsKey(_kSfxVolume)) {
+      await _prefs.setDouble(_kSfxVolume, 0.8);
     }
   }
 
@@ -40,6 +55,10 @@ class StorageService {
   int get slowHookBoosts => _prefs.getInt(_kBoostSlowHook) ?? 0;
   int get secondChanceBoosts => _prefs.getInt(_kBoostSecondChance) ?? 0;
   bool get soundEnabled => _prefs.getBool(_kSoundEnabled) ?? true;
+  bool get musicEnabled => _prefs.getBool(_kMusicEnabled) ?? true;
+  bool get vibrationEnabled => _prefs.getBool(_kVibrationEnabled) ?? true;
+  double get musicVolume => _prefs.getDouble(_kMusicVolume) ?? 0.6;
+  double get sfxVolume => _prefs.getDouble(_kSfxVolume) ?? 0.8;
 
   /// Skins the player owns (block_asset_n). Always contains at least skin 1.
   List<int> get ownedSkins =>
@@ -59,6 +78,14 @@ class StorageService {
       _prefs.setInt(_kBoostSecondChance, value);
   Future<void> setSoundEnabled(bool value) =>
       _prefs.setBool(_kSoundEnabled, value);
+  Future<void> setMusicEnabled(bool value) =>
+      _prefs.setBool(_kMusicEnabled, value);
+  Future<void> setVibrationEnabled(bool value) =>
+      _prefs.setBool(_kVibrationEnabled, value);
+  Future<void> setMusicVolume(double value) =>
+      _prefs.setDouble(_kMusicVolume, value);
+  Future<void> setSfxVolume(double value) =>
+      _prefs.setDouble(_kSfxVolume, value);
   Future<void> setSelectedSkin(int skin) =>
       _prefs.setInt(_kSelectedSkin, skin);
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/app_assets.dart';
 import '../app/app_theme.dart';
 import '../main.dart';
+import '../services/audio_service.dart';
 import '../widgets/pixel_button.dart';
 
 /// Spend earned coins on cosmetic block skins or consumable boosts.
@@ -35,6 +36,7 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   Future<void> _buySkin(int skin) async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
     if (progress.ownedSkins.contains(skin)) {
       // Tapping an owned skin equips just that one (single-skin mode). Tap
       // "Random" below to switch back to rotation.
@@ -54,6 +56,7 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   Future<void> _buySlowHook() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
     final ok = await progress.spendCoins(_slowHookPrice);
     if (!ok) {
       _showSnack('Not enough coins');
@@ -63,6 +66,7 @@ class _ShopScreenState extends State<ShopScreen> {
   }
 
   Future<void> _buySecondChance() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
     final ok = await progress.spendCoins(_secondChancePrice);
     if (!ok) {
       _showSnack('Not enough coins');
@@ -97,7 +101,10 @@ class _ShopScreenState extends State<ShopScreen> {
                 children: [
                   Row(
                     children: [
-                      _BackButton(onTap: () => Navigator.of(context).pop()),
+                      _BackButton(onTap: () {
+                        AudioService.instance.playSfx(Sfx.buttonClick);
+                        Navigator.of(context).pop();
+                      }),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -144,7 +151,10 @@ class _ShopScreenState extends State<ShopScreen> {
                               child: _ToggleChoice(
                                 label: 'Random',
                                 selected: progress.selectedSkin == 0,
-                                onTap: () => progress.setSelectedSkin(0),
+                                onTap: () {
+                                  AudioService.instance.playSfx(Sfx.buttonClick);
+                                  progress.setSelectedSkin(0);
+                                },
                               ),
                             ),
                           ],

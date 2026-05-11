@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'app/app_theme.dart';
 import 'screens/loading_screen.dart';
+import 'services/audio_service.dart';
 import 'services/storage_service.dart';
 import 'state/game_progress.dart';
 
@@ -29,6 +30,8 @@ Future<void> main() async {
   if (progress.coins < debugCoinFloor) {
     await progress.addCoins(debugCoinFloor - progress.coins);
   }
+
+  await AudioService.init(progress);
 
   runApp(const TowerBalanceApp());
 }

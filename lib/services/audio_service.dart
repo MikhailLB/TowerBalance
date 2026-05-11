@@ -1,0 +1,129 @@
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+
+import '../state/game_progress.dart';
+
+/// One-shot SFX channels available throughout the game.
+enum Sfx {
+  /// Played when the player taps any UI button.
+  buttonClick,
+
+  /// Played when a block hits the tower or fails the placement.
+  blockFall,
+}
+
+/// Background music tracks the game knows how to play.
+enum Bgm { menu, gameplay }
+
+/// Single global audio system. Owns:
+///   * one looping [AudioPlayer] for background music
+///   * one short-lived [AudioPlayer] per SFX play (so concurrent taps don't
+///     cancel each other)
+///   * mute / volume preferences read from [GameProgress]
+///
+/// Initialise once in `main()` after [GameProgress] exists, then call from
+/// anywhere via [AudioService.instance]. Listens to the progress object so
+/// volume/mute changes apply immediately without restarting tracks.
+class AudioService {
+  AudioService._(this._progress);
+
+  static AudioService? _instance;
+  static AudioService get instance {
+    final i = _instance;
+    if (i == null) {
+      throw StateError('AudioService.init() must be called first');
+    }
+    return i;
+  }
+
+  static const _kMenuBgm = 'music/mainmenumusic.mp3';
+  static const _kGameplayBgm = 'music/gameplaymusic.mp3';
+  static const _kBlockFall = 'music/block_fall_sound.mp3';
+  static const _kButtonClick = 'music/button-click-error.mp3';
+
+  final GameProgress _progress;
+  final AudioPlayer _bgm = AudioPlayer(playerId: 'tower_balance_bgm');
+  Bgm? _currentBgm;
+
+  /// Initialise the global audio system. Pre-loads the SFX clips so they
+  /// fire with no perceptible latency. Safe to call multiple times.
+  static Future<void> init(GameProgress progress) async {
+    if (_instance != null) return;
+    final svc = AudioService._(progress);
+    _instance = svc;
+    await svc._bgm.setReleaseMode(ReleaseMode.loop);
+    await svc._bgm.setVolume(progress.musicVolume);
+    progress.addListener(svc._onProgressChanged);
+  }
+
+  void _onProgressChanged() {
+    // Apply music volume / mute changes live.
+    if (_progress.musicEnabled) {
+      _bgm.setVolume(_progress.musicVolume);
+      if (_currentBgm != null && _bgm.state != PlayerState.playing) {
+        _bgm.resume();
+      }
+    } else {
+      _bgm.pause();
+    }
+  }
+
+  String _bgmPath(Bgm bgm) =>
+      bgm == Bgm.menu ? _kMenuBgm : _kGameplayBgm;
+
+  String _sfxPath(Sfx sfx) =>
+      sfx == Sfx.buttonClick ? _kButtonClick : _kBlockFall;
+
+  /// Start (or switch to) the given background track. Idempotent — calling
+  /// with the same [bgm] while it's already playing is a no-op.
+  Future<void> playBgm(Bgm bgm) async {
+    if (_currentBgm == bgm && _bgm.state == PlayerState.playing) return;
+    _currentBgm = bgm;
+    if (!_progress.musicEnabled) return;
+    try {
+      await _bgm.stop();
+      await _bgm.setVolume(_progress.musicVolume);
+      await _bgm.play(AssetSource(_bgmPath(bgm)));
+    } catch (e) {
+      debugPrint('AudioService: bgm play failed: $e');
+    }
+  }
+
+  /// Stop the background music entirely (used when leaving the app).
+  Future<void> stopBgm() async {
+    _currentBgm = null;
+    try {
+      await _bgm.stop();
+    } catch (_) {}
+  }
+
+  /// Fire-and-forget SFX. Spawns its own short-lived [AudioPlayer] each call
+  /// so simultaneous SFX don't truncate each other.
+  Future<void> playSfx(Sfx sfx) async {
+    if (!_progress.soundEnabled) return;
+    final player = AudioPlayer();
+    try {
+      await player.setReleaseMode(ReleaseMode.release);
+      await player.setVolume(_progress.sfxVolume);
+      await player.play(AssetSource(_sfxPath(sfx)));
+      // Auto-dispose once the clip is done.
+      player.onPlayerComplete.first.then((_) => player.dispose());
+    } catch (e) {
+      debugPrint('AudioService: sfx play failed: $e');
+      player.dispose();
+    }
+  }
+
+  /// Trigger a short device vibration if the player has it enabled.
+  /// Uses [HapticFeedback] from `flutter/services` so we don't need an extra
+  /// permission or plugin.
+  Future<void> vibrate({bool heavy = false}) async {
+    if (!_progress.vibrationEnabled) return;
+    if (heavy) {
+      await HapticFeedback.heavyImpact();
+    } else {
+      await HapticFeedback.mediumImpact();
+    }
+  }
+}

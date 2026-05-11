@@ -4,6 +4,7 @@ import 'package:flame/components.dart';
 import 'package:flame_forge2d/flame_forge2d.dart';
 import 'package:flutter/foundation.dart';
 
+import '../services/audio_service.dart';
 import 'components/cloud.dart';
 import 'components/ground.dart';
 import 'components/hook.dart';
@@ -227,6 +228,10 @@ class TowerWorld extends Forge2DWorld with HasGameReference<TowerGame> {
     _settleTimer = 0;
     _fallTimer = 0;
 
+    // Successful placement — short thunk + light haptic.
+    AudioService.instance.playSfx(Sfx.blockFall);
+    AudioService.instance.vibrate();
+
     // Attach a fresh block to the hook for the next swing.
     hook.attachNewBlock();
     status.value = TowerGameStatus.swinging;
@@ -248,6 +253,8 @@ class TowerWorld extends Forge2DWorld with HasGameReference<TowerGame> {
       _fallTimer = 0;
       return;
     }
+    AudioService.instance.playSfx(Sfx.blockFall);
+    AudioService.instance.vibrate(heavy: true);
     status.value = TowerGameStatus.gameOver;
   }
 
