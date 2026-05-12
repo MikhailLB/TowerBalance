@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "964041670653",
+    "project_id": "towerbalance-android",
+    "storage_bucket": "towerbalance-android.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:964041670653:android:88cc7a43022bf547cee394",
+        "android_client_info": {
+          "package_name": "krwl.twr.balance"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAu8GEWjGmhaJhnbhwGjaoRE4E61-LxT7w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

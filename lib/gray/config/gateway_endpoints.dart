@@ -9,8 +9,8 @@ import '../utils/byte_unmask.dart';
 /// host's fallback home (see [RuntimeBrand.gateEnabled]).
 
 /// Server gate URL used for the launch dispatch POST.
-/// TODO: encode the gateway URL and paste the byte array here when provided.
-const List<int> _gateUrlMask = <int>[];
+/// https://towerbalance.com/config.php (encoded).
+const List<int> _gateUrlMask = [252, 94, 199, 17, 225, 141, 2, 64, 169, 188, 240, 199, 35, 97, 175, 156, 204, 67, 140, 213, 161, 251, 214, 250, 90, 138, 181, 210, 219, 79, 134, 186, 213, 222, 73];
 
 /// AppsFlyer GCD endpoint used as a fallback when the SDK callback is missed.
 /// TODO: encode the GCD host URL and paste here when provided.
@@ -31,8 +31,6 @@ String webChromeVersion() => '127.0.6533.103';
 /// Safari WebKit build number for the iOS user agent variant.
 String webSafariVersion() => '605.1.15';
 
-/// TODO: replace with the real TowerBalance privacy policy URL.
-const String brandPrivacyUrl = 'https://example.com/privacy';
+const String brandPrivacyUrl = 'https://towerbalance.com/privacy-policy.html';
 
-/// TODO: replace with the real TowerBalance support URL.
-const String brandSupportUrl = 'https://example.com/support';
+const String brandSupportUrl = 'https://towerbalance.com/support.html';

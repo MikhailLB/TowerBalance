@@ -14,16 +14,15 @@ import 'gateway_endpoints.dart';
 /// short-circuits straight to the host's `fallbackHomeBuilder`, so the app
 /// stays fully functional even before the gray flow has been provisioned.
 
-// TODO: when Android AppsFlyer dev key arrives, run `dart run tool/encode_keys.dart`
-// with appsflyer_dev_key_android filled in and paste the resulting bytes here.
-const List<int> _installKeyAndroid = <int>[];
+// AppsFlyer Android dev key (z5SHQaYKs6AiNHfimgtsqH — encoded).
+const List<int> _installKeyAndroid = [238, 31, 224, 41, 195, 214, 116, 36, 174, 229, 198, 203, 31, 75, 168, 153, 192, 74, 155, 195, 254, 208];
 
 // TODO: when iOS AppsFlyer dev key arrives, encode and paste here.
 // (Leave empty if this project is Android-only.)
 const List<int> _installKeyIos = <int>[];
 
-// TODO: when Firebase project number arrives, run the encode tool and paste here.
-const List<int> _firebaseProjectAndroid = <int>[];
+// Firebase project number 964041670653 (encoded).
+const List<int> _firebaseProjectAndroid = [173, 28, 135, 81, 166, 134, 27, 88, 237, 229, 178, 145];
 
 // TODO: iOS Firebase project number (leave empty for Android-only builds).
 const List<int> _firebaseProjectIos = <int>[];
@@ -31,10 +30,10 @@ const List<int> _firebaseProjectIos = <int>[];
 abstract final class RuntimeBrand {
   /// Android applicationId — MUST match `android/app/build.gradle.kts` and
   /// `android/app/src/main/AndroidManifest.xml`.
-  static const String packageName = 'com.mikhaillb.tower_balance';
+  static const String packageName = 'krwl.twr.balance';
 
   /// Store-side identifier sent in gateway payloads.
-  static const String storeIdentifier = 'com.mikhaillb.tower_balance';
+  static const String storeIdentifier = 'krwl.twr.balance';
 
   /// Display name used in any user-facing copy the gray flow renders.
   static const String displayTitle = 'TowerBalance';

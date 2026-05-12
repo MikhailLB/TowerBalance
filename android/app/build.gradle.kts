@@ -21,7 +21,7 @@ if (file("google-services.json").exists()) {
 }
 
 android {
-    namespace = "com.mikhaillb.tower_balance"
+    namespace = "krwl.twr.balance"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -37,7 +37,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.mikhaillb.tower_balance"
+        applicationId = "krwl.twr.balance"
         // minSdk 26: required by FCM adaptive notification icon (API 26+).
         // Covers Android 8.0+, which accounts for 99%+ of active devices.
         minSdk = 26
