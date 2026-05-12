@@ -27,6 +27,10 @@ class _GameScreenState extends State<GameScreen> {
   TowerGame? _game;
   late final math.Random _rand = math.Random();
   bool _scoreSubmitted = false;
+  // Tracks the highest score already credited as coins, so a player who uses
+  // a Second Chance and earns more blocks afterwards is only paid the delta
+  // on the final submission (avoids double-paying for the first attempt).
+  int _coinsCreditedFor = 0;
 
   /// Counter used by [_pickSkin] when the player has the rotation mode
   /// enabled (selectedSkin == 0). Cycles through owned skins in order so each
@@ -52,6 +56,7 @@ class _GameScreenState extends State<GameScreen> {
 
   void _spawnGame({required bool useSlowHook}) {
     _scoreSubmitted = false;
+    _coinsCreditedFor = 0;
     // Reset rotation each round, with a small random offset so consecutive
     // games don't always start with the same skin.
     final owned = progress.ownedSkins;
@@ -99,8 +104,11 @@ class _GameScreenState extends State<GameScreen> {
     AudioService.instance.playSfx(Sfx.buttonClick);
     final granted = await progress.consumeSecondChance();
     if (!granted) return;
+    // Re-open the submission gate. _submitFinalScore credits the delta only,
+    // so blocks placed after the second chance are still rewarded but the
+    // pre-second-chance score isn't paid twice.
+    _scoreSubmitted = false;
     _game?.requestSecondChance();
-    _game?.setPaused(false);
   }
 
   Future<void> _onRestart() async {
@@ -118,7 +126,17 @@ class _GameScreenState extends State<GameScreen> {
   Future<void> _submitFinalScore(int score) async {
     if (_scoreSubmitted) return;
     _scoreSubmitted = true;
-    await progress.reportScore(score);
+    // High score is reported in absolute terms; coins are awarded only on the
+    // newly-earned delta so second-chance runs don't pay the early portion
+    // of the run twice.
+    if (score > progress.highScore) {
+      await progress.setHighScore(score);
+    }
+    final delta = score - _coinsCreditedFor;
+    if (delta > 0) {
+      await progress.addCoins(delta);
+      _coinsCreditedFor = score;
+    }
   }
 
   @override

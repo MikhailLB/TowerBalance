@@ -9,6 +9,7 @@ import '../main.dart';
 import '../services/audio_service.dart';
 import '../widgets/pixel_button.dart';
 import 'game_screen.dart';
+import 'info_web_screen.dart';
 import 'settings_screen.dart';
 import 'shop_screen.dart';
 
@@ -30,7 +31,6 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     super.initState();
     SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
     ]);
     _floatController = AnimationController(
       vsync: this,
@@ -71,6 +71,30 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     AudioService.instance.playSfx(Sfx.buttonClick);
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+    );
+  }
+
+  Future<void> _openPrivacy() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const InfoWebScreen(
+          title: 'Privacy Policy',
+          url: 'https://towerbalance.com/privacy-policy.html',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSupport() async {
+    AudioService.instance.playSfx(Sfx.buttonClick);
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const InfoWebScreen(
+          title: 'Support',
+          url: 'https://towerbalance.com/support.html',
+        ),
+      ),
     );
   }
 
@@ -136,6 +160,23 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                         fontSize: 24,
                         color: PixelButtonColor.secondary,
                       ),
+                      const SizedBox(height: 14),
+                      // Privacy + Support: small links required for store
+                      // compliance. Each opens an in-app WebView.
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _TextLinkButton(
+                            label: 'Privacy Policy',
+                            onTap: _openPrivacy,
+                          ),
+                          const SizedBox(width: 18),
+                          _TextLinkButton(
+                            label: 'Support',
+                            onTap: _openSupport,
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ],
@@ -143,6 +184,31 @@ class _MainMenuScreenState extends State<MainMenuScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TextLinkButton extends StatelessWidget {
+  const _TextLinkButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Text(
+          label,
+          style: AppTextStyles.body(size: 14, color: Colors.white).copyWith(
+            decoration: TextDecoration.underline,
+            decorationColor: Colors.white70,
+          ),
+        ),
       ),
     );
   }

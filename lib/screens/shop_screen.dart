@@ -15,9 +15,20 @@ class ShopScreen extends StatefulWidget {
 }
 
 class _ShopScreenState extends State<ShopScreen> {
-  static const _skinPrice = 80;
+  // Per-skin price ladder. Skins 1..3 are buyable; skins 4..6 are placeholders
+  // for upcoming content ("Coming soon"), so we leave their price at 0 and
+  // gate the purchase flow on [_isComingSoon].
+  static const Map<int, int> _skinPrices = {
+    1: 10,
+    2: 100,
+    3: 500,
+  };
+  static const int _firstComingSoonSkin = 4; // 4, 5, 6 are locked.
   static const _slowHookPrice = 35;
   static const _secondChancePrice = 60;
+
+  bool _isComingSoon(int skin) => skin >= _firstComingSoonSkin;
+  int? _priceOf(int skin) => _skinPrices[skin];
 
   @override
   void initState() {
@@ -37,13 +48,19 @@ class _ShopScreenState extends State<ShopScreen> {
 
   Future<void> _buySkin(int skin) async {
     AudioService.instance.playSfx(Sfx.buttonClick);
+    if (_isComingSoon(skin)) {
+      _showSnack('Coming soon');
+      return;
+    }
     if (progress.ownedSkins.contains(skin)) {
       // Tapping an owned skin equips just that one (single-skin mode). Tap
       // "Random" below to switch back to rotation.
       await progress.setSelectedSkin(skin);
       return;
     }
-    final ok = await progress.spendCoins(_skinPrice);
+    final price = _priceOf(skin);
+    if (price == null) return;
+    final ok = await progress.spendCoins(price);
     if (!ok) {
       _showSnack('Not enough coins');
       return;
@@ -134,11 +151,13 @@ class _ShopScreenState extends State<ShopScreen> {
                               final owned =
                                   progress.ownedSkins.contains(skin);
                               final selected = progress.selectedSkin == skin;
+                              final comingSoon = _isComingSoon(skin);
                               return _SkinCard(
                                 skin: skin,
                                 owned: owned,
                                 selected: selected,
-                                price: _skinPrice,
+                                price: _priceOf(skin),
+                                comingSoon: comingSoon,
                                 onTap: () => _buySkin(skin),
                               );
                             },
@@ -266,57 +285,95 @@ class _SkinCard extends StatelessWidget {
     required this.owned,
     required this.selected,
     required this.price,
+    required this.comingSoon,
     required this.onTap,
   });
 
   final int skin;
   final bool owned;
   final bool selected;
-  final int price;
+  final int? price;
+  final bool comingSoon;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final borderColor = selected
         ? AppColors.accent
-        : (owned ? Colors.white60 : Colors.black54);
+        : (owned
+            ? Colors.white60
+            : (comingSoon ? Colors.white24 : Colors.black54));
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: 110,
-        decoration: BoxDecoration(
-          color: AppColors.panel,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor, width: 3),
-        ),
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          children: [
-            Expanded(
-              child: Image.asset(
-                AppAssets.block(skin),
-                fit: BoxFit.contain,
+      child: Stack(
+        children: [
+          Container(
+            width: 110,
+            decoration: BoxDecoration(
+              color: AppColors.panel,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor, width: 3),
+            ),
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              children: [
+                Expanded(
+                  child: Opacity(
+                    opacity: comingSoon ? 0.35 : 1,
+                    child: Image.asset(
+                      AppAssets.block(skin),
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                if (comingSoon)
+                  Text(
+                    'Coming soon',
+                    style: AppTextStyles.body(
+                      size: 11,
+                      color: Colors.white70,
+                    ),
+                    textAlign: TextAlign.center,
+                  )
+                else if (owned)
+                  Text(
+                    selected ? 'Equipped' : 'Owned',
+                    style: AppTextStyles.body(
+                        size: 12, color: AppColors.accent),
+                  )
+                else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.monetization_on_rounded,
+                          color: AppColors.accent, size: 14),
+                      const SizedBox(width: 2),
+                      Text('${price ?? 0}',
+                          style: AppTextStyles.body(size: 12)),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          if (comingSoon)
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.lock_rounded,
+                  color: Colors.white70,
+                  size: 14,
+                ),
               ),
             ),
-            const SizedBox(height: 4),
-            if (owned)
-              Text(
-                selected ? 'Equipped' : 'Owned',
-                style: AppTextStyles.body(size: 12, color: AppColors.accent),
-              )
-            else
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.monetization_on_rounded,
-                      color: AppColors.accent, size: 14),
-                  const SizedBox(width: 2),
-                  Text('$price',
-                      style: AppTextStyles.body(size: 12)),
-                ],
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }

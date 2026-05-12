@@ -57,9 +57,6 @@ class _LoadingScreenState extends State<LoadingScreen>
     super.initState();
     SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
@@ -274,7 +271,7 @@ class _LoadingScreenState extends State<LoadingScreen>
                   // never collides with the centre/lower text baked into the
                   // splash video. Safe-area is intentionally ignored here —
                   // the bar art has its own padding around the pixels.
-                  bottom: isPortrait ? 4 : 2,
+                  bottom: 0,
                   child: Center(
                     child: AnimatedBuilder(
                       animation: _progressController,

@@ -103,6 +103,34 @@ class TowerWorld extends Forge2DWorld with HasGameReference<TowerGame> {
     status.value = TowerGameStatus.falling;
   }
 
+  /// Player picked "Second chance" on the game-over overlay. Reset the
+  /// failure state back to a fresh swing without touching the score or the
+  /// existing tower so the run continues.
+  ///
+  /// Earlier this was driven by [secondChanceAvailable] alone, but by the
+  /// time the overlay appears `_handleFail` has already promoted status to
+  /// `gameOver` and the update loop is short-circuited (so the flag is never
+  /// read). We have to perform the recovery manually.
+  void applySecondChance() {
+    if (status.value != TowerGameStatus.gameOver) return;
+    if (_secondChanceUsedThisRun) return;
+    _secondChanceUsedThisRun = true;
+    secondChanceAvailable = false;
+
+    // Drop whatever block triggered the loss so the player isn't staring at
+    // it lying on the ground when the game resumes.
+    final block = _activeBlock;
+    _activeBlock = null;
+    if (block != null && block.isMounted) {
+      block.removeFromParent();
+    }
+
+    _settleTimer = 0;
+    _fallTimer = 0;
+    hook.attachNewBlock();
+    status.value = TowerGameStatus.swinging;
+  }
+
   /// Pause / resume the world. Setting `paused` on the game also stops Box2D
   /// from stepping, so this just flips the status enum for the overlay.
   void setPaused(bool value) {

@@ -84,6 +84,6 @@ class TowerGame extends Forge2DGame<TowerWorld> with TapCallbacks {
   }
 
   void requestSecondChance() {
-    world.secondChanceAvailable = true;
+    world.applySecondChance();
   }
 }

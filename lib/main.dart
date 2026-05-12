@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app/app_theme.dart';
@@ -13,23 +13,15 @@ late final GameProgress progress;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Portrait-only across the whole app, including iPad (the iPad layout
+  // overflows in landscape because every screen is designed for a tall
+  // aspect ratio).
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
   ]);
 
   final storage = await StorageService.create();
   progress = GameProgress(storage);
-
-  // Debug grant: top up to at least 10 000 coins on every launch so the shop
-  // can be exercised. Idempotent — only adds the delta needed to reach the
-  // floor, never goes above it on subsequent launches.
-  const debugCoinFloor = 10000;
-  if (progress.coins < debugCoinFloor) {
-    await progress.addCoins(debugCoinFloor - progress.coins);
-  }
 
   await AudioService.init(progress);
 

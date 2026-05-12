@@ -66,6 +66,13 @@ class GameProgress extends ChangeNotifier {
     await addCoins(score);
   }
 
+  Future<void> setHighScore(int score) async {
+    if (score <= _highScore) return;
+    _highScore = score;
+    await _storage.setHighScore(_highScore);
+    notifyListeners();
+  }
+
   Future<void> setSelectedSkin(int skin) async {
     _selectedSkin = skin;
     await _storage.setSelectedSkin(skin);
