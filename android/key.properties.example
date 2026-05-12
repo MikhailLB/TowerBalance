@@ -1,0 +1,8 @@
+# Copy to android/key.properties (never commit) and place upload-keystore.jks in android/app/.
+# Codemagic: create env group with CM_KEYSTORE (base64 .jks), CM_KEYSTORE_PASSWORD,
+# CM_KEY_PASSWORD, CM_KEY_ALIAS — the workflow writes key.properties and the .jks for you.
+
+storePassword=your_store_password
+keyPassword=your_key_password
+keyAlias=upload
+storeFile=upload-keystore.jks
