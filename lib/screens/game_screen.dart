@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
+import '../app/app_orientation.dart';
 import '../app/app_theme.dart';
 import '../game/game_status.dart';
 import '../game/tower_game.dart';
@@ -41,6 +43,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
+    setAppOrientationsForGameplay();
     // Defer the Flame world creation until after the route transition has
     // finished painting. Otherwise we try to spin up Forge2D + load textures
     // mid-animation which can stall the UI thread for hundreds of ms.
@@ -52,6 +55,12 @@ class _GameScreenState extends State<GameScreen> {
       });
     });
     AudioService.instance.playBgm(Bgm.gameplay);
+  }
+
+  @override
+  void dispose() {
+    unawaited(setAppOrientationsForNonGame());
+    super.dispose();
   }
 
   void _spawnGame({required bool useSlowHook}) {

@@ -1,7 +1,6 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import 'app/app_theme.dart';
+import 'app/app_orientation.dart';import 'app/app_theme.dart';
 import 'screens/loading_screen.dart';
 import 'services/audio_service.dart';
 import 'services/storage_service.dart';
@@ -13,12 +12,8 @@ late final GameProgress progress;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Portrait-only across the whole app, including iPad (the iPad layout
-  // overflows in landscape because every screen is designed for a tall
-  // aspect ratio).
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  // Allow rotation everywhere except gameplay (see [GameScreen]).
+  await setAppOrientationsForNonGame();
 
   final storage = await StorageService.create();
   progress = GameProgress(storage);

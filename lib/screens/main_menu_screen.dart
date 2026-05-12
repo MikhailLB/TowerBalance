@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../app/app_assets.dart';
+import '../app/app_orientation.dart';
 import '../app/app_theme.dart';
 import '../main.dart';
 import '../services/audio_service.dart';
@@ -13,8 +13,8 @@ import 'info_web_screen.dart';
 import 'settings_screen.dart';
 import 'shop_screen.dart';
 
-/// Main menu shown after the loading splash. Locks the device into portrait
-/// mode (gameplay is portrait-only).
+/// Main menu shown after the loading splash. Allows rotation; only
+/// [GameScreen] locks to portrait.
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
 
@@ -29,9 +29,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   @override
   void initState() {
     super.initState();
-    SystemChrome.setPreferredOrientations(const [
-      DeviceOrientation.portraitUp,
-    ]);
+    setAppOrientationsForNonGame();
     _floatController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),

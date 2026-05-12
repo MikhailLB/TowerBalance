@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 
 import '../app/app_assets.dart';
+import '../app/app_orientation.dart';
 import 'main_menu_screen.dart';
 
 /// Initial splash that plays a looping promo video and shows a 4-state
@@ -55,9 +56,7 @@ class _LoadingScreenState extends State<LoadingScreen>
   @override
   void initState() {
     super.initState();
-    SystemChrome.setPreferredOrientations(const [
-      DeviceOrientation.portraitUp,
-    ]);
+    setAppOrientationsForNonGame();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
     _progressController = AnimationController(
