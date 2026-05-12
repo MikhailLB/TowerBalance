@@ -37,7 +37,6 @@ class _NetworkPauseScreenState extends State<NetworkPauseScreen>
   VoidCallback? _landscapeListener;
 
   bool _videosReady = false;
-  bool _videoFailed = false;
   bool _busy = false;
   bool _hint = false;
   Timer? _hintTimer;
@@ -62,7 +61,7 @@ class _NetworkPauseScreenState extends State<NetworkPauseScreen>
     final landscapePath = GrayAssets.networkPauseBackgroundLandscape;
 
     if (portraitPath == null && landscapePath == null) {
-      if (mounted) setState(() => _videoFailed = true);
+      // No video paths configured — image / gradient fallback handles it.
       return;
     }
 
@@ -107,11 +106,9 @@ class _NetworkPauseScreenState extends State<NetworkPauseScreen>
         _portraitCtl = portrait;
         _landscapeCtl = landscape;
         _videosReady = true;
-        _videoFailed = false;
       });
     } catch (e) {
       debugPrint('[NetworkPause] video init failed: $e');
-      if (mounted) setState(() => _videoFailed = true);
     }
   }
 
@@ -189,6 +186,11 @@ class _NetworkPauseScreenState extends State<NetworkPauseScreen>
           final videoReady =
               _videosReady && ctl != null && ctl.value.isInitialized;
 
+          final imagePath = isPortrait
+              ? GrayAssets.networkPauseImagePortrait
+              : GrayAssets.networkPauseImageLandscape;
+          final hasImage = imagePath != null && imagePath.isNotEmpty;
+
           return LayoutBuilder(
             builder: (context, c) {
               final buttonWidth = isPortrait
@@ -198,11 +200,11 @@ class _NetworkPauseScreenState extends State<NetworkPauseScreen>
               return Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Background: video → gradient
+                  // Background: video → image → gradient fallback
                   if (videoReady)
                     _FullCoverVideo(controller: ctl)
-                  else if (_videoFailed)
-                    _DefaultPauseBackground(isPortrait: isPortrait)
+                  else if (hasImage)
+                    Image.asset(imagePath, fit: BoxFit.cover)
                   else
                     _DefaultPauseBackground(isPortrait: isPortrait),
 

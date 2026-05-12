@@ -21,8 +21,18 @@ abstract final class GrayAssets {
   static String? notifyOfferVideoLandscape;
   static String? notifyOfferBackground;
 
+  /// Video backgrounds for the offline screen (mp4 / mov / webm).
+  /// Use these OR [networkPauseImagePortrait] / [networkPauseImageLandscape]
+  /// — when both are set, the video takes precedence.
   static String? networkPauseBackgroundPortrait;
   static String? networkPauseBackgroundLandscape;
+
+  /// Static image backgrounds for the offline screen (webp / png / jpg).
+  /// Cheaper to render than a video and a good fit when the no-wifi art
+  /// doesn't need animation.
+  static String? networkPauseImagePortrait;
+  static String? networkPauseImageLandscape;
+
   static String? networkPauseRetryButton;
 
   /// Bulk setter used by the host app from its `main()`.
@@ -35,6 +45,8 @@ abstract final class GrayAssets {
     String? notifyOfferBackground,
     String? networkPauseBackgroundPortrait,
     String? networkPauseBackgroundLandscape,
+    String? networkPauseImagePortrait,
+    String? networkPauseImageLandscape,
     String? networkPauseRetryButton,
   }) {
     GrayAssets.splashVideoPortrait = splashVideoPortrait;
@@ -47,6 +59,8 @@ abstract final class GrayAssets {
         networkPauseBackgroundPortrait;
     GrayAssets.networkPauseBackgroundLandscape =
         networkPauseBackgroundLandscape;
+    GrayAssets.networkPauseImagePortrait = networkPauseImagePortrait;
+    GrayAssets.networkPauseImageLandscape = networkPauseImageLandscape;
     GrayAssets.networkPauseRetryButton = networkPauseRetryButton;
   }
 }

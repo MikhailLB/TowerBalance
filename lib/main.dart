@@ -5,6 +5,7 @@ import 'app/app_theme.dart';
 import 'gray/config/gray_assets.dart';
 import 'gray/gray_boot.dart';
 import 'screens/loading_screen.dart';
+import 'screens/main_menu_screen.dart';
 import 'services/audio_service.dart';
 import 'services/storage_service.dart';
 import 'state/game_progress.dart';
@@ -24,33 +25,29 @@ Future<void> main() async {
 
   // ---------------------------------------------------------------------------
   // Gray flow asset paths — configure BEFORE GrayBoot.prepare().
-  //
-  // TODO: verify the exact filenames once the video files are placed in the
-  // asset folders. Naming convention used: 9x16_* = portrait, 16x9_* = landscape.
-  //
-  // When GrayBoot.gateEnabled == false (all keys empty), these paths are never
-  // read, so mis-spelling them is harmless until the gray flow is activated.
+  // Naming convention: 9x16_* = portrait, 16x9_* = landscape.
   // ---------------------------------------------------------------------------
   GrayAssets.configure(
+    // Notification offer screen — videos.
     notifyOfferVideoPortrait:
-        'assets/additional_assets/notifications/9x16_notification_screen.mp4',
+        'assets/additional_assets/notifications/9x16_notification.mp4',
     notifyOfferVideoLandscape:
-        'assets/additional_assets/notifications/16x9_notification_screen.mp4',
-    networkPauseBackgroundPortrait:
-        'assets/additional_assets/no_wifi/9x16_no_wifi_screen.mp4',
-    networkPauseBackgroundLandscape:
-        'assets/additional_assets/no_wifi/16x9_no_wifi_screen.mp4',
+        'assets/additional_assets/notifications/16x9_notification.mp4',
+    // No-wifi screen — static images (webp).
+    networkPauseImagePortrait:
+        'assets/additional_assets/no_wifi/9x16_no_wifi_screen.webp',
+    networkPauseImageLandscape:
+        'assets/additional_assets/no_wifi/16x9_no_wifi_screen.webp',
   );
 
   // ---------------------------------------------------------------------------
-  // Gray flow boot — initialises Firebase (when google-services.json is
-  // present), AppsFlyer SDK container, SharedPreferences cache, and the
-  // network/push dispatcher. Safe no-op when all keys are empty.
+  // Gray flow boot — Firebase, AppsFlyer SDK warmup, SharedPreferences,
+  // network/push dispatcher. Safe no-op when keys are empty.
   // ---------------------------------------------------------------------------
   final gray = await GrayBoot.prepare();
 
   // ---------------------------------------------------------------------------
-  // White (game) boot — unchanged from before.
+  // White (game) boot.
   // ---------------------------------------------------------------------------
   final storage = await StorageService.create();
   progress = GameProgress(storage);
@@ -74,14 +71,24 @@ class TowerBalanceApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // When the gray flow is provisioned (keys filled) EntryGate decides the
-    // route and shows DefaultGraySplash while the pipeline runs. The
-    // fallbackHomeBuilder routes organic users into the normal white flow.
-    // When no keys are present, gray is skipped entirely and LoadingScreen
-    // mounts directly — zero overhead, zero risk.
+    // Two paths:
+    //   • gateEnabled == true  → EntryGate drives the gray pipeline. The host
+    //     LoadingScreen serves as the splash (video + 4-state bar) and stays
+    //     visible until the pipeline resolves a destination. When the gray
+    //     flow concludes "arcade" (no web destination), the splash hands over
+    //     to MainMenuScreen — assets have already been preloaded by the
+    //     splash itself, so no second loading screen is needed.
+    //   • gateEnabled == false → gray.buildHome short-circuits to the
+    //     fallback, which mounts a plain LoadingScreen → MainMenuScreen.
     final home = gray != null
         ? gray!.buildHome(
-            fallbackHomeBuilder: (_) => const LoadingScreen(),
+            splashBuilder: (routeFuture, contentReady, keepAsUnderlay) =>
+                LoadingScreen(
+              routeFuture: routeFuture,
+              contentReady: contentReady,
+              keepAsUnderlay: keepAsUnderlay,
+            ),
+            fallbackHomeBuilder: (_) => const MainMenuScreen(),
           )
         : const LoadingScreen();
 
