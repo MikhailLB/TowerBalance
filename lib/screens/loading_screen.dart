@@ -330,56 +330,22 @@ class _LoadingScreenState extends State<LoadingScreen>
     super.dispose();
   }
 
-  Widget _buildSplash(BuildContext context) {
-    final orientation = MediaQuery.of(context).orientation;
-    final isPortrait = orientation == Orientation.portrait;
+  /// Only the video background — no bar. The bar lives in the outer Stack
+  /// so it can be positioned relative to the guaranteed full-screen canvas.
+  Widget _buildVideoBackground() {
     final video = _video;
     final videoReady = video != null && video.value.isInitialized;
-    final screenReady = videoReady || _videoFailed;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (videoReady)
-          FittedBox(
-            fit: BoxFit.cover,
-            child: SizedBox(
-              width: video.value.size.width,
-              height: video.value.size.height,
-              child: VideoPlayer(video),
-            ),
-          )
-        else
-          const ColoredBox(color: Colors.black),
-        // The bar appears as soon as the screen is "ready".
-        // Positioned must be a direct child of Stack — AnimatedOpacity goes
-        // inside it, not the other way around.
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: isPortrait ? 6 : 2,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 300),
-            opacity: screenReady ? 1 : 0,
-            child: Center(
-              child: AnimatedBuilder(
-                animation: _progress,
-                builder: (context, _) {
-                  final state = (_progress.value * 4)
-                      .clamp(0.0, 4.0)
-                      .floor()
-                      .clamp(1, 4);
-                  return _LoadingBar(
-                    state: state,
-                    isPortrait: isPortrait,
-                  );
-                },
-              ),
-            ),
-          ),
+    if (videoReady) {
+      return FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: video.value.size.width,
+          height: video.value.size.height,
+          child: VideoPlayer(video),
         ),
-      ],
-    );
+      );
+    }
+    return const ColoredBox(color: Colors.black);
   }
 
   @override
@@ -389,20 +355,32 @@ class _LoadingScreenState extends State<LoadingScreen>
     // and never gets remounted.
     final renderUnderlay = _keepDecision == true && _resolvedBuilder != null;
 
+    // Resolve these in build() so the bar's Positioned is a direct child of
+    // the outer Stack — the only way to guarantee pixel-perfect bottom placement.
+    final isPortrait =
+        MediaQuery.orientationOf(context) == Orientation.portrait;
+    final video = _video;
+    final videoReady = video != null && video.value.isInitialized;
+    final screenReady = videoReady || _videoFailed;
+    final splashOpacity = _useUnderlay ? 0.0 : 1.0;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         fit: StackFit.expand,
         children: [
+          // 1. Underlay widget (WebView) — mounted once, never remounted.
           if (renderUnderlay)
             Positioned.fill(child: Builder(builder: _resolvedBuilder!)),
+
+          // 2. Video background — fades out when handing over to the underlay.
           if (_splashVisible)
             Positioned.fill(
               child: AbsorbPointer(
                 absorbing: !_useUnderlay,
                 child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 400),
-                  opacity: _useUnderlay ? 0.0 : 1.0,
+                  opacity: splashOpacity,
                   onEnd: () async {
                     if (!mounted || !_splashVisible) return;
                     if (_useUnderlay) {
@@ -410,7 +388,37 @@ class _LoadingScreenState extends State<LoadingScreen>
                       await _disposeSplashAssets();
                     }
                   },
-                  child: _buildSplash(context),
+                  child: _buildVideoBackground(),
+                ),
+              ),
+            ),
+
+          // 3. Loading bar — direct child of the outer Stack so `bottom` is
+          //    relative to the true full-screen canvas, not a nested widget.
+          if (_splashVisible)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: isPortrait ? 6 : 2,
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 300),
+                  opacity: screenReady ? splashOpacity : 0.0,
+                  child: Center(
+                    child: AnimatedBuilder(
+                      animation: _progress,
+                      builder: (context, _) {
+                        final state = (_progress.value * 4)
+                            .clamp(0.0, 4.0)
+                            .floor()
+                            .clamp(1, 4);
+                        return _LoadingBar(
+                          state: state,
+                          isPortrait: isPortrait,
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             ),
