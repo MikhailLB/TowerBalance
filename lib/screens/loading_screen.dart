@@ -9,27 +9,30 @@ import 'package:video_player/video_player.dart';
 import '../app/app_assets.dart';
 import 'main_menu_screen.dart';
 
-/// Branded loading splash. Plays a looping promo video (portrait/landscape)
-/// and animates a 4-state engraved progress bar while heavy assets warm up.
+/// Branded loading splash. Plays the orientation-matched intro video and
+/// animates the 4-state engraved progress bar; once both the bar animation
+/// and the optional [routeFuture] have completed, navigates to the resolved
+/// page.
 ///
-/// Doubles as the splash for the gray boot flow: when [routeFuture],
+/// Doubles as the splash for the gray boot flow. When [routeFuture],
 /// [contentReady], and/or [keepAsUnderlay] are passed (by `EntryGate`), the
 /// screen holds itself visible until both the bar animation has completed
-/// and the gray pipeline has resolved a destination.
+/// AND the gray pipeline has resolved a destination AND any underlay has
+/// reported first paint.
 ///
-///   • [routeFuture]     — completes with the widget builder for the next
-///                         screen (or `null` to fall back to [MainMenuScreen]).
-///   • [contentReady]    — completes when the resolved widget has actually
-///                         painted its first frame (BrowserShell signals this
-///                         on `onPageFinished`). When omitted the splash
-///                         treats content as ready immediately.
-///   • [keepAsUnderlay]  — when it resolves to `true`, the resolved widget is
-///                         mounted UNDER the splash; the splash then fades
-///                         out without a route swap (preserves WebView state).
-///                         Otherwise navigation uses `pushReplacement`.
+/// Video lifecycle mirrors the working TowerFalls implementation:
+///   • a single controller is lazy-loaded on the FIRST [didChangeDependencies]
+///     pass and on every subsequent orientation change.
+///   • the previous controller is disposed only AFTER the new one is fully
+///     bound to a Surface (prevents the "black flash" on rotation).
+///   • the progress bar appears as soon as the screen is ready (video bound
+///     or load failed) — no extra delay.
 class LoadingScreen extends StatefulWidget {
   final Future<WidgetBuilder>? routeFuture;
   final Future<void>? contentReady;
+  // Resolves to true when the resolved widget is something we MUST keep
+  // mounted (so it doesn't lose state on handover — i.e. WebView). When
+  // false / null we fall back to Navigator.pushReplacement.
   final Future<bool>? keepAsUnderlay;
 
   const LoadingScreen({
@@ -45,33 +48,38 @@ class LoadingScreen extends StatefulWidget {
 
 class _LoadingScreenState extends State<LoadingScreen>
     with SingleTickerProviderStateMixin {
-  VideoPlayerController? _portraitVideo;
-  VideoPlayerController? _landscapeVideo;
-  bool _videosReady = false;
-  bool _showBar = false;
-  bool _hasNavigated = false;
+  // Hard ceiling we wait for [contentReady]. If the underlay never signals
+  // (e.g. silent WebView crash) the splash still hands over so the user is
+  // not stuck on a 100% progress bar forever.
+  static const Duration _contentReadyDeadline = Duration(seconds: 12);
 
-  VoidCallback? _portraitListener;
-  VoidCallback? _landscapeListener;
+  // Bar duration. After it completes we ALSO require the optional gray gates
+  // to have settled before navigating.
+  static const Duration _barDuration = Duration(milliseconds: 4500);
 
-  late final AnimationController _progressController;
+  // Minimum on-screen time for the splash. Stops the bar from "flickering"
+  // off the screen on very fast cold-starts (and gives the route + content
+  // gates a chance to resolve when they're nearly-instant).
+  static const Duration _minSplashDuration = Duration(milliseconds: 6000);
 
-  // Gray-flow gating state.
+  VideoPlayerController? _video;
+  Orientation? _videoOrientation;
+  bool _videoLoading = false;
+  bool _videoFailed = false;
+
+  late final AnimationController _progress;
+  bool _progressStarted = false;
+  bool _assetsPreloadStarted = false;
+  DateTime? _splashStart;
+
+  bool _navigated = false;
+
   WidgetBuilder? _resolvedBuilder;
   bool _routeReady = false;
   bool _contentReady = false;
   bool? _keepDecision;
   bool _useUnderlay = false;
   bool _splashVisible = true;
-
-  static const _minDuration = Duration(milliseconds: 6000);
-  static const _barDelay = Duration(milliseconds: 120);
-  static const _barDuration = Duration(milliseconds: 4500);
-
-  // Hard deadline for [contentReady]; if the underlay never reports painted
-  // (silent WebView crash etc.) we still hand over instead of stalling on
-  // a full progress bar forever.
-  static const _contentReadyDeadline = Duration(seconds: 12);
 
   @override
   void initState() {
@@ -84,12 +92,21 @@ class _LoadingScreenState extends State<LoadingScreen>
     ]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
-    _progressController = AnimationController(
+    _progress = AnimationController(
       vsync: this,
       duration: _barDuration,
-    );
+    )
+      ..addListener(() {
+        if (mounted) setState(() {});
+      })
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) _maybeGoNext();
+      });
 
-    // Wire gray-flow signals (no-op when running in plain host mode).
+    _wireGraySignals();
+  }
+
+  void _wireGraySignals() {
     final routeFuture = widget.routeFuture;
     if (routeFuture == null) {
       _routeReady = true;
@@ -100,10 +117,12 @@ class _LoadingScreenState extends State<LoadingScreen>
           _resolvedBuilder = builder;
           _routeReady = true;
         });
+        _maybeGoNext();
       }).catchError((err, st) {
         debugPrint('[LoadingScreen] route resolver failed: $err\n$st');
         if (!mounted) return;
         setState(() => _routeReady = true);
+        _maybeGoNext();
       });
     }
 
@@ -129,104 +148,79 @@ class _LoadingScreenState extends State<LoadingScreen>
       }).then((_) {
         if (!mounted) return;
         setState(() => _contentReady = true);
+        _maybeGoNext();
       }).catchError((err) {
         debugPrint('[LoadingScreen] contentReady error: $err');
         if (!mounted) return;
         setState(() => _contentReady = true);
+        _maybeGoNext();
       });
     }
-
-    _initialise();
   }
 
-  Future<void> _initialise() async {
-    final start = DateTime.now();
-    Flame.images.prefix = '';
-
-    await _initVideos();
-    if (!mounted) return;
-    setState(() => _videosReady = true);
-
-    await Future<void>.delayed(_barDelay);
-    if (!mounted) return;
-    setState(() => _showBar = true);
-
-    final barFuture = _progressController.forward();
-    final assetsFuture = _preloadGameAssets();
-
-    await Future.wait([barFuture, assetsFuture]);
-
-    final elapsed = DateTime.now().difference(start);
-    if (elapsed < _minDuration) {
-      await Future<void>.delayed(_minDuration - elapsed);
-    }
-
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-
-    // Gray-flow: hold the splash until the pipeline + first-paint have settled.
-    await _waitForGrayHandover();
-    if (!mounted) return;
-
-    _goNext();
-  }
-
-  /// Polls the gray-flow state flags until both the route is known AND
-  /// (for web flows) the underlay has reported first paint. Cheap busy-loop
-  /// because the flags are flipped from `then()` callbacks and a single
-  /// `Future.delayed` per iteration is enough to yield to the event loop.
-  Future<void> _waitForGrayHandover() async {
-    while (mounted && !(_routeReady && _contentReady)) {
-      await Future<void>.delayed(const Duration(milliseconds: 16));
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final orientation = MediaQuery.of(context).orientation;
+    if (!_videoLoading && _videoOrientation != orientation) {
+      _loadVideo(orientation);
     }
   }
 
-  Future<void> _initVideos() async {
+  Future<void> _loadVideo(Orientation orientation) async {
+    _videoLoading = true;
+    final path = orientation == Orientation.landscape
+        ? AppAssets.loadingVideoLandscape
+        : AppAssets.loadingVideoPortrait;
+
+    final previous = _video;
+    final controller = VideoPlayerController.asset(path);
     try {
-      final portrait =
-          VideoPlayerController.asset(AppAssets.loadingVideoPortrait);
-      final landscape =
-          VideoPlayerController.asset(AppAssets.loadingVideoLandscape);
-
-      await Future.wait([portrait.initialize(), landscape.initialize()]);
-
-      portrait.setLooping(true);
-      landscape.setLooping(true);
-      portrait.setVolume(0);
-      landscape.setVolume(0);
-
-      try {
-        await portrait.play();
-      } catch (_) {}
-      try {
-        await landscape.play();
-      } catch (_) {}
-
-      _portraitListener = () => _restartIfFinished(portrait);
-      _landscapeListener = () => _restartIfFinished(landscape);
-      portrait.addListener(_portraitListener!);
-      landscape.addListener(_landscapeListener!);
-
-      _portraitVideo = portrait;
-      _landscapeVideo = landscape;
+      await controller.initialize().timeout(const Duration(seconds: 6));
+      await controller.setLooping(true);
+      await controller.setVolume(0.0);
+      await controller.play();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      setState(() {
+        _video = controller;
+        _videoOrientation = orientation;
+        _videoFailed = false;
+      });
+      // Dispose the previous orientation's controller AFTER swapping so
+      // there's never a frame where both are nil.
+      await previous?.dispose();
+      _startProgressIfNeeded();
+      _startPreloadIfNeeded();
     } catch (e, st) {
-      debugPrint('LoadingScreen: video init failed: $e\n$st');
+      debugPrint('Loading video failed ($path): $e\n$st');
+      await controller.dispose();
+      if (mounted) {
+        setState(() {
+          _videoOrientation = orientation;
+          _videoFailed = true;
+        });
+      }
+      _startProgressIfNeeded();
+      _startPreloadIfNeeded();
+    } finally {
+      _videoLoading = false;
     }
   }
 
-  void _restartIfFinished(VideoPlayerController c) {
-    final value = c.value;
-    if (!value.isInitialized) return;
-    if (value.isPlaying) return;
-    if (value.position < value.duration) return;
-    c.seekTo(Duration.zero);
-    c.play();
+  void _startProgressIfNeeded() {
+    if (_progressStarted) return;
+    _progressStarted = true;
+    _splashStart = DateTime.now();
+    _progress.forward();
   }
 
-  void _kickIfNotPlaying(VideoPlayerController? c) {
-    if (c == null) return;
-    if (!c.value.isInitialized) return;
-    if (c.value.isPlaying) return;
-    c.play();
+  void _startPreloadIfNeeded() {
+    if (_assetsPreloadStarted) return;
+    _assetsPreloadStarted = true;
+    unawaited(_preloadGameAssets());
   }
 
   Future<void> _preloadGameAssets() async {
@@ -262,18 +256,33 @@ class _LoadingScreenState extends State<LoadingScreen>
     }
   }
 
+  void _maybeGoNext() {
+    if (_navigated) return;
+    if (_progress.status != AnimationStatus.completed) return;
+    if (!_routeReady) return;
+    if (!_contentReady) return;
+    // Enforce minimum on-screen time before handing over.
+    final start = _splashStart;
+    if (start != null) {
+      final remaining = _minSplashDuration - DateTime.now().difference(start);
+      if (remaining > Duration.zero) {
+        Future.delayed(remaining, _maybeGoNext);
+        return;
+      }
+    }
+    _goNext();
+  }
+
   Future<void> _goNext() async {
-    if (_hasNavigated || !mounted) return;
-    _hasNavigated = true;
+    if (_navigated || !mounted) return;
+    _navigated = true;
 
     bool keep = false;
     final keepFuture = widget.keepAsUnderlay;
     if (keepFuture != null) {
       try {
-        keep = await keepFuture.timeout(
-          const Duration(milliseconds: 500),
-          onTimeout: () => false,
-        );
+        keep = await keepFuture
+            .timeout(const Duration(milliseconds: 500), onTimeout: () => false);
       } catch (_) {
         keep = false;
       }
@@ -281,7 +290,7 @@ class _LoadingScreenState extends State<LoadingScreen>
     if (!mounted) return;
 
     if (keep && _resolvedBuilder != null) {
-      // Underlay mode: the resolved widget is mounted under the splash; just
+      // Underlay mode: the resolved widget mounts under the splash; we just
       // fade the splash out and dispose its heavy bits.
       setState(() => _useUnderlay = true);
       return;
@@ -292,7 +301,7 @@ class _LoadingScreenState extends State<LoadingScreen>
       PageRouteBuilder(
         pageBuilder: (context, animation, secondary) =>
             Builder(builder: builder),
-        transitionDuration: const Duration(milliseconds: 600),
+        transitionDuration: const Duration(milliseconds: 400),
         transitionsBuilder: (context, animation, secondary, child) =>
             FadeTransition(opacity: animation, child: child),
       ),
@@ -300,97 +309,79 @@ class _LoadingScreenState extends State<LoadingScreen>
   }
 
   Future<void> _disposeSplashAssets() async {
-    final portrait = _portraitVideo;
-    final landscape = _landscapeVideo;
-    _portraitVideo = null;
-    _landscapeVideo = null;
+    final video = _video;
+    _video = null;
     try {
-      _progressController.stop();
+      _progress.stop();
     } catch (_) {}
     try {
-      await portrait?.pause();
+      await video?.pause();
     } catch (_) {}
     try {
-      await landscape?.pause();
-    } catch (_) {}
-    try {
-      await portrait?.dispose();
-    } catch (_) {}
-    try {
-      await landscape?.dispose();
+      await video?.dispose();
     } catch (_) {}
     if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    if (_portraitListener != null) {
-      _portraitVideo?.removeListener(_portraitListener!);
-    }
-    if (_landscapeListener != null) {
-      _landscapeVideo?.removeListener(_landscapeListener!);
-    }
-    _portraitVideo?.dispose();
-    _landscapeVideo?.dispose();
-    _progressController.dispose();
+    _video?.dispose();
+    _progress.dispose();
     super.dispose();
   }
 
   Widget _buildSplash(BuildContext context) {
-    return OrientationBuilder(
-      builder: (context, orientation) {
-        final isPortrait = orientation == Orientation.portrait;
-        final controller = isPortrait ? _portraitVideo : _landscapeVideo;
-        if (controller != null && controller.value.isInitialized) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _kickIfNotPlaying(controller);
-          });
-        }
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            if (_videosReady &&
-                controller != null &&
-                controller.value.isInitialized)
-              _FullCoverVideo(controller: controller)
-            else
-              Container(color: Colors.black),
-            if (_showBar)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: isPortrait ? 4 : 2,
-                child: Center(
-                  child: AnimatedBuilder(
-                    animation: _progressController,
-                    builder: (context, _) {
-                      final progress = _progressController.value;
-                      final state = (progress * 4)
-                          .clamp(0.0, 4.0)
-                          .floor()
-                          .clamp(1, 4);
-                      return _LoadingBar(
-                        state: state,
-                        isPortrait: isPortrait,
-                      );
-                    },
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
+    final orientation = MediaQuery.of(context).orientation;
+    final isPortrait = orientation == Orientation.portrait;
+    final video = _video;
+    final videoReady = video != null && video.value.isInitialized;
+    final screenReady = videoReady || _videoFailed;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (videoReady)
+          FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: video.value.size.width,
+              height: video.value.size.height,
+              child: VideoPlayer(video),
+            ),
+          )
+        else
+          const ColoredBox(color: Colors.black),
+        // The bar appears as soon as the screen is "ready" (either the video
+        // is bound or load definitively failed) — no extra delay.
+        AnimatedOpacity(
+          duration: const Duration(milliseconds: 300),
+          opacity: screenReady ? 1 : 0,
+          child: Align(
+            alignment: Alignment(0, isPortrait ? 0.98 : 0.98),
+            child: AnimatedBuilder(
+              animation: _progress,
+              builder: (context, _) {
+                final state = (_progress.value * 4)
+                    .clamp(0.0, 4.0)
+                    .floor()
+                    .clamp(1, 4);
+                return _LoadingBar(
+                  state: state,
+                  isPortrait: isPortrait,
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Single, stable widget tree so the underlay (e.g. BrowserShell hosting a
+    // Single stable widget tree so the underlay (e.g. BrowserShell hosting a
     // WebView) keeps the same Element across the splash → handover transition
-    // and never gets remounted (which would tear down the WebView and lose
-    // its loading state). The underlay only mounts when the gray flow asked
-    // for it (`keepAsUnderlay == true`); otherwise navigation is via
-    // [Navigator.pushReplacement] inside [_goNext].
+    // and never gets remounted.
     final renderUnderlay = _keepDecision == true && _resolvedBuilder != null;
 
     return Scaffold(
@@ -419,28 +410,6 @@ class _LoadingScreenState extends State<LoadingScreen>
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _FullCoverVideo extends StatelessWidget {
-  const _FullCoverVideo({required this.controller});
-
-  final VideoPlayerController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRect(
-      child: SizedBox.expand(
-        child: FittedBox(
-          fit: BoxFit.cover,
-          child: SizedBox(
-            width: controller.value.size.width,
-            height: controller.value.size.height,
-            child: VideoPlayer(controller),
-          ),
-        ),
       ),
     );
   }

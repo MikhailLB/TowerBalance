@@ -12,18 +12,15 @@ import '../services/pulse_dispatch.dart';
 import '../services/runtime_cache.dart';
 import 'browser_shell.dart';
 
-/// Custom permission prompt shown before opening the WebView. Plays a branded
-/// background video (portrait + landscape) and renders Accept / Skip buttons
-/// ~1 cm from the bottom of the screen via CustomPainter.
+/// Custom permission prompt shown before opening the WebView. The screen
+/// uses a branded background video (orientation-matched, lazy-loaded) and
+/// two engraved "Accept" / "Skip" plates rendered with custom painters so
+/// we don't depend on opaque PNGs.
 ///
-/// Video lifecycle (ported from TowerBalance LoadingScreen — prevents stutter):
-///   1. Both portrait AND landscape controllers are initialised in initState.
-///   2. Both are played immediately so the codec can bind to a texture early.
-///   3. Each time the orientation changes the visible controller gets an extra
-///      play() kick via addPostFrameCallback — catches codecs that only start
-///      delivering frames after a Surface is attached.
-///   4. A listener on each controller restarts it only when the platform
-///      actually reports completion (instead of polling).
+/// Video lifecycle mirrors the working TowerFalls implementation — a single
+/// controller is lazy-loaded on the first `didChangeDependencies` pass and
+/// re-loaded on every orientation change. The previous controller is
+/// disposed only AFTER the new one is fully bound to a Surface.
 class NotifyOfferScreen extends StatefulWidget {
   final RuntimeCache cache;
   final PulseDispatch pulse;
@@ -44,14 +41,9 @@ class NotifyOfferScreen extends StatefulWidget {
 
 class _NotifyOfferScreenState extends State<NotifyOfferScreen>
     with TickerProviderStateMixin {
-  // Pre-initialised controllers — both created upfront so an orientation
-  // switch is instant (no re-init stutter).
-  VideoPlayerController? _portraitCtl;
-  VideoPlayerController? _landscapeCtl;
-  VoidCallback? _portraitListener;
-  VoidCallback? _landscapeListener;
-
-  bool _videosReady = false;
+  VideoPlayerController? _video;
+  Orientation? _videoOrientation;
+  bool _videoLoading = false;
   bool _videoFailed = false;
   bool _busy = false;
 
@@ -79,100 +71,68 @@ class _NotifyOfferScreenState extends State<NotifyOfferScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1300),
     )..repeat(reverse: true);
-
-    _initBothVideos();
   }
 
-  /// Initialises portrait + landscape controllers in parallel and starts
-  /// playback immediately, matching TowerBalance's LoadingScreen approach.
-  Future<void> _initBothVideos() async {
-    final portraitPath = GrayAssets.notifyOfferVideoPortrait;
-    final landscapePath = GrayAssets.notifyOfferVideoLandscape;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final orientation = MediaQuery.of(context).orientation;
+    if (!_videoLoading && _videoOrientation != orientation) {
+      _loadVideo(orientation);
+    }
+  }
 
-    if (portraitPath == null && landscapePath == null) {
-      if (mounted) setState(() => _videoFailed = true);
+  Future<void> _loadVideo(Orientation orientation) async {
+    _videoLoading = true;
+    final asset = orientation == Orientation.landscape
+        ? GrayAssets.notifyOfferVideoLandscape
+        : GrayAssets.notifyOfferVideoPortrait;
+
+    if (asset == null || asset.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _videoOrientation = orientation;
+          _videoFailed = true;
+        });
+      }
+      _videoLoading = false;
       return;
     }
 
+    final previous = _video;
+    final controller = VideoPlayerController.asset(asset);
     try {
-      VideoPlayerController? portrait;
-      VideoPlayerController? landscape;
-
-      final futures = <Future<void>>[];
-
-      if (portraitPath != null) {
-        portrait = VideoPlayerController.asset(portraitPath);
-        futures.add(portrait.initialize());
-      }
-      if (landscapePath != null) {
-        landscape = VideoPlayerController.asset(landscapePath);
-        futures.add(landscape.initialize());
-      }
-
-      await Future.wait(futures);
-
+      await controller.initialize().timeout(const Duration(seconds: 6));
+      await controller.setLooping(true);
+      await controller.setVolume(0.0);
+      await controller.play();
       if (!mounted) {
-        await portrait?.dispose();
-        await landscape?.dispose();
+        await controller.dispose();
         return;
       }
-
-      for (final ctl in [portrait, landscape]) {
-        if (ctl == null) continue;
-        ctl.setLooping(true);
-        ctl.setVolume(0);
-        try {
-          await ctl.play();
-        } catch (_) {}
-      }
-
-      _portraitListener = () => _restartIfFinished(portrait);
-      _landscapeListener = () => _restartIfFinished(landscape);
-      portrait?.addListener(_portraitListener!);
-      landscape?.addListener(_landscapeListener!);
-
       setState(() {
-        _portraitCtl = portrait;
-        _landscapeCtl = landscape;
-        _videosReady = true;
+        _video = controller;
+        _videoOrientation = orientation;
         _videoFailed = false;
       });
-    } catch (e) {
-      debugPrint('[NotifyOffer] video init failed: $e');
-      if (mounted) setState(() => _videoFailed = true);
+      await previous?.dispose();
+    } catch (e, st) {
+      debugPrint('[NotifyOffer] video failed ($asset): $e\n$st');
+      await controller.dispose();
+      if (mounted) {
+        setState(() {
+          _videoOrientation = orientation;
+          _videoFailed = true;
+        });
+      }
+    } finally {
+      _videoLoading = false;
     }
-  }
-
-  /// Restarts a controller only when it actually reports reaching its end.
-  /// Cheap, idempotent, and avoids the polling-based approach that caused
-  /// stutter in earlier implementations.
-  void _restartIfFinished(VideoPlayerController? c) {
-    if (c == null) return;
-    final v = c.value;
-    if (!v.isInitialized || v.isPlaying) return;
-    if (v.position < v.duration) return;
-    c.seekTo(Duration.zero);
-    c.play();
-  }
-
-  /// Kicks playback after the video texture has been bound to the widget tree.
-  /// Some Android codecs silently ignore play() calls made before the Surface
-  /// is attached; the kick ensures the first frame arrives promptly.
-  void _kickIfNotPlaying(VideoPlayerController? c) {
-    if (c == null || !c.value.isInitialized || c.value.isPlaying) return;
-    c.play();
   }
 
   @override
   void dispose() {
-    if (_portraitListener != null) {
-      _portraitCtl?.removeListener(_portraitListener!);
-    }
-    if (_landscapeListener != null) {
-      _landscapeCtl?.removeListener(_landscapeListener!);
-    }
-    _portraitCtl?.dispose();
-    _landscapeCtl?.dispose();
+    _video?.dispose();
     _shimmer.dispose();
     _pulse.dispose();
     super.dispose();
@@ -218,56 +178,46 @@ class _NotifyOfferScreenState extends State<NotifyOfferScreen>
 
   @override
   Widget build(BuildContext context) {
+    final video = _video;
+    final ready = video != null && video.value.isInitialized;
+    final bg = GrayAssets.notifyOfferBackground;
     return Scaffold(
       backgroundColor: const Color(0xFF050912),
-      body: OrientationBuilder(
-        builder: (context, orientation) {
-          final isPortrait = orientation == Orientation.portrait;
-          final ctl = isPortrait ? _portraitCtl : _landscapeCtl;
-
-          // Kick play after the texture for this orientation has been bound.
-          if (ctl != null && ctl.value.isInitialized) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _kickIfNotPlaying(ctl);
-            });
-          }
-
-          final videoReady =
-              _videosReady && ctl != null && ctl.value.isInitialized;
-          final bg = GrayAssets.notifyOfferBackground;
-
-          return LayoutBuilder(
-            builder: (context, c) {
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Background: video → fallback image → gradient
-                  if (videoReady)
-                    _FullCoverVideo(controller: ctl)
-                  else if (_videoFailed && bg != null && bg.isNotEmpty)
-                    Image.asset(bg, fit: BoxFit.cover)
-                  else
-                    const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF132036), Color(0xFF050912)],
-                        ),
-                      ),
-                    ),
-                  // Accept / Skip buttons at ~1 cm from the screen bottom.
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: _buttonBottom,
-                    child: isPortrait
-                        ? _portraitButtons(c)
-                        : _landscapeButtons(c),
+      body: LayoutBuilder(
+        builder: (context, c) {
+          final landscape = c.maxWidth > c.maxHeight;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              if (ready)
+                FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: video.value.size.width,
+                    height: video.value.size.height,
+                    child: VideoPlayer(video),
                   ),
-                ],
-              );
-            },
+                )
+              else if (_videoFailed && bg != null && bg.isNotEmpty)
+                Image.asset(bg, fit: BoxFit.cover)
+              else
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF132036), Color(0xFF050912)],
+                    ),
+                  ),
+                ),
+              // Buttons pinned ~1 cm from the screen bottom.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: _buttonBottom,
+                child: landscape ? _landscapeButtons(c) : _portraitButtons(c),
+              ),
+            ],
           );
         },
       ),
@@ -333,31 +283,6 @@ class _NotifyOfferScreenState extends State<NotifyOfferScreen>
           aspectRatio: 5.6,
         ),
       ],
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Video widget
-// ---------------------------------------------------------------------------
-
-class _FullCoverVideo extends StatelessWidget {
-  const _FullCoverVideo({required this.controller});
-  final VideoPlayerController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRect(
-      child: SizedBox.expand(
-        child: FittedBox(
-          fit: BoxFit.cover,
-          child: SizedBox(
-            width: controller.value.size.width,
-            height: controller.value.size.height,
-            child: VideoPlayer(controller),
-          ),
-        ),
-      ),
     );
   }
 }
