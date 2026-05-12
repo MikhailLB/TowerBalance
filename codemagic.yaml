@@ -1,0 +1,102 @@
+# Codemagic: https://docs.codemagic.io/flutter/flutter-projects/
+# Marketing/build numbers: pubspec.yaml → version: 1.0.0+1
+
+workflows:
+  tower-balance-release:
+    name: TowerBalance Release
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      java: 17
+      groups:
+        - tower_balance_secrets
+      vars:
+        PACKAGE_NAME: "com.mikhaillb.tower_balance"
+        # Apple Developer Program (membership) — used by tools / docs; signing
+        # still uses certificates configured in Codemagic.
+        APPLE_TEAM_ID: "3RWHTQ644A"
+        # App Store Connect → Apps → Tower Balance → App Information → Apple ID (numeric)
+        APP_STORE_CONNECT_APPLE_ID: "6768463410"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.mikhaillb.towerBalance
+      # Create env group `tower_balance_secrets` with:
+      #   CM_KEYSTORE — base64 -w 0 (or mac: base64 -i file.jks) of upload-keystore.jks
+      #   CM_KEYSTORE_PASSWORD, CM_KEY_PASSWORD, CM_KEY_ALIAS
+      # Apple: connect Developer Portal + App Store Connect in Codemagic UI; optionally:
+      # integrations:
+      #   app_store_connect: <integration_id_from_codemagic>
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "main"
+          include: true
+
+    scripts:
+      - name: Prepare Android signing
+        script: |
+          set -e
+          if [ -z "${CM_KEYSTORE:-}" ]; then
+            echo "ERROR: CM_KEYSTORE empty. Add secrets to group tower_balance_secrets."
+            exit 1
+          fi
+          python3 -c "import os,base64,sys; sys.stdout.buffer.write(base64.standard_b64decode(os.environ['CM_KEYSTORE']))" > "$CM_BUILD_DIR/android/app/upload-keystore.jks"
+          printf '%s\n' "storePassword=$CM_KEYSTORE_PASSWORD" "keyPassword=$CM_KEY_PASSWORD" "keyAlias=$CM_KEY_ALIAS" "storeFile=upload-keystore.jks" > "$CM_BUILD_DIR/android/key.properties"
+
+      - name: Get Flutter packages
+        script: |
+          cd "$CM_BUILD_DIR"
+          flutter pub get
+
+      - name: Flutter analyze
+        script: |
+          cd "$CM_BUILD_DIR"
+          flutter analyze --no-fatal-infos
+
+      - name: Install CocoaPods
+        script: |
+          cd "$CM_BUILD_DIR/ios"
+          pod install
+
+      - name: Set up iOS code signing
+        script: |
+          cd "$CM_BUILD_DIR"
+          xcode-project use-profiles
+
+      - name: Build Android App Bundle
+        script: |
+          cd "$CM_BUILD_DIR"
+          flutter build appbundle --release
+
+      - name: Build Android APK
+        script: |
+          cd "$CM_BUILD_DIR"
+          flutter build apk --release
+
+      - name: Build iOS IPA
+        script: |
+          cd "$CM_BUILD_DIR"
+          flutter build ipa --release
+
+    artifacts:
+      - build/app/outputs/**/*.aab
+      - build/app/outputs/flutter-apk/*.apk
+      - build/ios/ipa/*.ipa
+
+    # publishing:
+    #   email:
+    #     recipients: [ you@example.com ]
+    #     notify: { success: true, failure: true }
+    #   google_play:
+    #     credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+    #     track: internal
+    #   app_store_connect:
+    #     auth: integration
+    #     api_key: <App_Store_Connect_API_key_integration_name>
+    #     apple_id: 6768463410
+    #     submit_to_testflight: true
