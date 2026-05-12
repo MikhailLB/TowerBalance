@@ -14,7 +14,7 @@ workflows:
       groups:
         - tower_balance_secrets
       vars:
-        PACKAGE_NAME: "com.mikhaillb.tower_balance"
+        PACKAGE_NAME: "krwl.twr.balance"
         # Apple Developer Program (membership) — used by tools / docs; signing
         # still uses certificates configured in Codemagic.
         APPLE_TEAM_ID: "3RWHTQ644A"
@@ -22,7 +22,7 @@ workflows:
         APP_STORE_CONNECT_APPLE_ID: "6768463410"
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.mikhaillb.towerBalance
+        bundle_identifier: krwl.twr.balance
       # Create env group `tower_balance_secrets` with:
       #   CM_KEYSTORE — base64 -w 0 (or mac: base64 -i file.jks) of upload-keystore.jks
       #   CM_KEYSTORE_PASSWORD, CM_KEY_PASSWORD, CM_KEY_ALIAS

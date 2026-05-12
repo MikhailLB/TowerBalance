@@ -15,7 +15,7 @@ val hasReleaseKeystore =
     }
 
 android {
-    namespace = "com.mikhaillb.tower_balance"
+    namespace = "krwl.twr.balance"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -30,7 +30,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.mikhaillb.tower_balance"
+        applicationId = "krwl.twr.balance"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

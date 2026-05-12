@@ -1,4 +1,4 @@
-package com.mikhaillb.tower_balance
+package krwl.twr.balance
 
 import io.flutter.embedding.android.FlutterActivity
 

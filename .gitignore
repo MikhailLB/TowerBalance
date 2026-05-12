@@ -50,3 +50,6 @@ build_log.txt
 android/key.properties
 android/app/upload-keystore.jks
 android/app/*.jks
+
+# Kotlin compiler session
+android/.kotlin/
