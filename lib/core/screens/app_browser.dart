@@ -406,37 +406,63 @@ class _BrowserShellState extends State<AppBrowser>
   void _injectKeyboardScroll() {
     _wv.runJavaScript(r'''
 (function(){
-  if (window.__tfKbScroll) return;
-  window.__tfKbScroll = true;
-  function isInput(n){
-    return n && (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA' || n.isContentEditable);
+  if (window.__appKbFix) return;
+  window.__appKbFix = true;
+
+  var _timers = [];
+  var _kbOpen = false;
+  var _vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+
+  function _cancel() {
+    _timers.forEach(clearTimeout);
+    _timers = [];
   }
-  function pull(){
+
+  function _isEditable(el) {
+    return el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+  }
+
+  function _scrollToActive() {
     var el = document.activeElement;
-    if (!isInput(el)) return;
+    if (!_isEditable(el)) return;
     var vp = window.visualViewport;
-    if (vp){
-      var rect = el.getBoundingClientRect();
-      if (rect.bottom > vp.offsetTop + vp.height - 24 || rect.top < vp.offsetTop){
-        el.scrollIntoView({behavior:'smooth', block:'center'});
-      }
-    } else {
-      el.scrollIntoView({behavior:'smooth', block:'center'});
+    var rect = el.getBoundingClientRect();
+    var vpTop = vp ? vp.offsetTop : 0;
+    var vpBot = vp ? (vp.offsetTop + vp.height) : window.innerHeight;
+    if (rect.bottom > vpBot - 24 || rect.top < vpTop) {
+      el.scrollIntoView({block: 'center'});
     }
   }
-  document.addEventListener('focusin', function(e){
-    if (isInput(e.target)){
-      setTimeout(pull, 220);
-      setTimeout(pull, 480);
-      setTimeout(pull, 820);
-    }
+
+  // focusin: schedule ONE scroll attempt after the keyboard has animated in.
+  document.addEventListener('focusin', function(e) {
+    if (!_isEditable(e.target)) return;
+    _cancel();
+    _timers.push(setTimeout(_scrollToActive, 280));
   });
-  if (window.visualViewport){
-    var prev = window.visualViewport.height;
-    window.visualViewport.addEventListener('resize', function(){
+
+  // focusout / keyboard closing: cancel any pending scroll so we don't fight
+  // the native layout snap-back that happens after the keyboard hides.
+  document.addEventListener('focusout', function() {
+    _cancel();
+  });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', function() {
       var h = window.visualViewport.height;
-      if (h < prev){ setTimeout(pull, 80); setTimeout(pull, 320); }
-      prev = h;
+      // Use a 120 px threshold to distinguish keyboard from orientation change.
+      if (h < _vpH - 120 && !_kbOpen) {
+        // Keyboard appeared.
+        _kbOpen = true;
+        _cancel();
+        _timers.push(setTimeout(_scrollToActive, 200));
+      } else if (h > _vpH + 120 && _kbOpen) {
+        // Keyboard dismissed — cancel any pending scroll so the page can
+        // snap back cleanly without fighting our scroll calls.
+        _kbOpen = false;
+        _cancel();
+      }
+      _vpH = h;
     });
   }
 })();

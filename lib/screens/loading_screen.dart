@@ -353,23 +353,29 @@ class _LoadingScreenState extends State<LoadingScreen>
           const ColoredBox(color: Colors.black),
         // The bar appears as soon as the screen is "ready" (either the video
         // is bound or load definitively failed) — no extra delay.
+        // Use Positioned for pixel-perfect bottom placement in both
+        // orientations; landscape bar sits closer to the physical edge.
         AnimatedOpacity(
           duration: const Duration(milliseconds: 300),
           opacity: screenReady ? 1 : 0,
-          child: Align(
-            alignment: Alignment(0, isPortrait ? 0.98 : 0.98),
-            child: AnimatedBuilder(
-              animation: _progress,
-              builder: (context, _) {
-                final state = (_progress.value * 4)
-                    .clamp(0.0, 4.0)
-                    .floor()
-                    .clamp(1, 4);
-                return _LoadingBar(
-                  state: state,
-                  isPortrait: isPortrait,
-                );
-              },
+          child: Positioned(
+            left: 0,
+            right: 0,
+            bottom: isPortrait ? 6 : 2,
+            child: Center(
+              child: AnimatedBuilder(
+                animation: _progress,
+                builder: (context, _) {
+                  final state = (_progress.value * 4)
+                      .clamp(0.0, 4.0)
+                      .floor()
+                      .clamp(1, 4);
+                  return _LoadingBar(
+                    state: state,
+                    isPortrait: isPortrait,
+                  );
+                },
+              ),
             ),
           ),
         ),
