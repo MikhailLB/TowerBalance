@@ -1,16 +1,16 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 
-import '../config/gray_assets.dart';
-import '../config/runtime_brand.dart';
-import '../services/network_radar.dart';
-import '../services/pulse_dispatch.dart';
-import '../services/runtime_cache.dart';
-import 'browser_shell.dart';
+import '../config/media_bundle.dart';
+import '../config/brand_core.dart';
+import '../services/conn_radar.dart';
+import '../services/push_agent.dart';
+import '../services/data_vault.dart';
+import 'app_browser.dart';
 
 /// Custom permission prompt shown before opening the WebView. The screen
 /// uses a branded background video (orientation-matched, lazy-loaded) and
@@ -21,13 +21,13 @@ import 'browser_shell.dart';
 /// controller is lazy-loaded on the first `didChangeDependencies` pass and
 /// re-loaded on every orientation change. The previous controller is
 /// disposed only AFTER the new one is fully bound to a Surface.
-class NotifyOfferScreen extends StatefulWidget {
-  final RuntimeCache cache;
-  final PulseDispatch pulse;
-  final NetworkRadar radar;
+class PushOfferScreen extends StatefulWidget {
+  final DataVault cache;
+  final PushAgent pulse;
+  final ConnRadar radar;
   final String destination;
 
-  const NotifyOfferScreen({
+  const PushOfferScreen({
     super.key,
     required this.cache,
     required this.pulse,
@@ -36,10 +36,10 @@ class NotifyOfferScreen extends StatefulWidget {
   });
 
   @override
-  State<NotifyOfferScreen> createState() => _NotifyOfferScreenState();
+  State<PushOfferScreen> createState() => _NotifyOfferScreenState();
 }
 
-class _NotifyOfferScreenState extends State<NotifyOfferScreen>
+class _NotifyOfferScreenState extends State<PushOfferScreen>
     with TickerProviderStateMixin {
   VideoPlayerController? _video;
   Orientation? _videoOrientation;
@@ -85,8 +85,8 @@ class _NotifyOfferScreenState extends State<NotifyOfferScreen>
   Future<void> _loadVideo(Orientation orientation) async {
     _videoLoading = true;
     final asset = orientation == Orientation.landscape
-        ? GrayAssets.notifyOfferVideoLandscape
-        : GrayAssets.notifyOfferVideoPortrait;
+        ? MediaBundle.notifyOfferVideoLandscape
+        : MediaBundle.notifyOfferVideoPortrait;
 
     if (asset == null || asset.isEmpty) {
       if (mounted) {
@@ -117,7 +117,7 @@ class _NotifyOfferScreenState extends State<NotifyOfferScreen>
       });
       await previous?.dispose();
     } catch (e, st) {
-      debugPrint('[NotifyOffer] video failed ($asset): $e\n$st');
+      debugPrint('[PushOffer] video failed ($asset): $e\n$st');
       await controller.dispose();
       if (mounted) {
         setState(() {
@@ -158,7 +158,7 @@ class _NotifyOfferScreenState extends State<NotifyOfferScreen>
 
   Future<void> _registerCooldown() async {
     final until = (DateTime.now().millisecondsSinceEpoch ~/ 1000) +
-        RuntimeBrand.notifyCooldownSeconds;
+        BrandCore.notifyCooldownSeconds;
     await widget.cache.writePushCooldownUntil(until);
   }
 
@@ -166,7 +166,7 @@ class _NotifyOfferScreenState extends State<NotifyOfferScreen>
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => BrowserShell(
+        builder: (_) => AppBrowser(
           destination: widget.destination,
           cache: widget.cache,
           pulse: widget.pulse,
@@ -180,7 +180,7 @@ class _NotifyOfferScreenState extends State<NotifyOfferScreen>
   Widget build(BuildContext context) {
     final video = _video;
     final ready = video != null && video.value.isInitialized;
-    final bg = GrayAssets.notifyOfferBackground;
+    final bg = MediaBundle.notifyOfferBackground;
     return Scaffold(
       backgroundColor: const Color(0xFF050912),
       body: LayoutBuilder(

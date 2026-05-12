@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -10,29 +10,29 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
-import '../services/network_radar.dart';
-import '../services/pulse_dispatch.dart';
-import '../services/runtime_cache.dart';
-import '../services/secure_http.dart';
-import 'network_pause_screen.dart';
+import '../services/conn_radar.dart';
+import '../services/push_agent.dart';
+import '../services/data_vault.dart';
+import '../services/safe_net.dart';
+import 'offline_screen.dart';
 
 enum _MediaSource { gallery, camera }
 
 /// In-app browser used when the gateway returns a destination URL. Keeps the
 /// session sticky to the first landed page and routes external schemes via
 /// the OS so the experience matches a real mobile browser.
-class BrowserShell extends StatefulWidget {
+class AppBrowser extends StatefulWidget {
   final String destination;
-  final RuntimeCache cache;
-  final PulseDispatch pulse;
-  final NetworkRadar radar;
-  // Fires once on the first successful onPageFinished. EntryGate uses this
+  final DataVault cache;
+  final PushAgent pulse;
+  final ConnRadar radar;
+  // Fires once on the first successful onPageFinished. AppGateway uses this
   // to keep the loading splash visible until the WebView has actually
   // painted its first page, so the progress bar never reaches 100% before
   // the web content is on screen.
   final VoidCallback? onFirstPaint;
 
-  const BrowserShell({
+  const AppBrowser({
     super.key,
     required this.destination,
     required this.cache,
@@ -42,10 +42,10 @@ class BrowserShell extends StatefulWidget {
   });
 
   @override
-  State<BrowserShell> createState() => _BrowserShellState();
+  State<AppBrowser> createState() => _BrowserShellState();
 }
 
-class _BrowserShellState extends State<BrowserShell>
+class _BrowserShellState extends State<AppBrowser>
     with WidgetsBindingObserver {
   late final WebViewController _wv;
   final ImagePicker _mediaPicker = ImagePicker();
@@ -77,7 +77,7 @@ class _BrowserShellState extends State<BrowserShell>
 
     _wv = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setUserAgent(secureHttp.userAgent)
+      ..setUserAgent(safeNet.userAgent)
       ..setBackgroundColor(Colors.black)
       ..enableZoom(false)
       ..setNavigationDelegate(_buildDelegate());
@@ -384,9 +384,9 @@ class _BrowserShellState extends State<BrowserShell>
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => NetworkPauseScreen(
+        builder: (_) => OfflineScreen(
           radar: widget.radar,
-          retryBuilder: (_) => BrowserShell(
+          retryBuilder: (_) => AppBrowser(
             destination: current,
             cache: widget.cache,
             pulse: widget.pulse,

@@ -1,20 +1,20 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+﻿import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/launch_route.dart';
+import '../models/app_route.dart';
 
-/// Persistence layer for the gray flow. Mixes SharedPreferences for quick
+/// Persistence layer for the core flow. Mixes SharedPreferences for quick
 /// non-sensitive flags and FlutterSecureStorage for the cached destination
 /// URL and the one-shot push target.
-class RuntimeCache {
-  // Storage keys are namespaced under `gray.` to avoid collisions with the
+class DataVault {
+  // Storage keys are namespaced under `core.` to avoid collisions with the
   // host app's own SharedPreferences / FlutterSecureStorage entries.
-  static const String _kRoute = 'gray.route';
-  static const String _kCachedTarget = 'gray.target.value';
-  static const String _kCachedTargetTtl = 'gray.target.ttl';
-  static const String _kPushCooldown = 'gray.push.cooldown';
-  static const String _kPushConsent = 'gray.push.consent';
-  static const String _kPushOneShot = 'gray.push.oneshot';
+  static const String _kRoute = 'tbl.rt';
+  static const String _kCachedTarget = 'tbl.tgt.v';
+  static const String _kCachedTargetTtl = 'tbl.tgt.ts';
+  static const String _kPushCooldown = 'tbl.psh.cd';
+  static const String _kPushConsent = 'tbl.psh.ok';
+  static const String _kPushOneShot = 'tbl.psh.os';
 
   late SharedPreferences _prefs;
   final FlutterSecureStorage _vault = const FlutterSecureStorage();
@@ -23,9 +23,9 @@ class RuntimeCache {
     _prefs = await SharedPreferences.getInstance();
   }
 
-  LaunchRoute readRoute() => LaunchRoute.decode(_prefs.getString(_kRoute));
+  AppRoute readRoute() => AppRoute.decode(_prefs.getString(_kRoute));
 
-  Future<void> writeRoute(LaunchRoute route) async {
+  Future<void> writeRoute(AppRoute route) async {
     await _prefs.setString(_kRoute, route.storageId());
   }
 

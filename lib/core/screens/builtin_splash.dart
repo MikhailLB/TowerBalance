@@ -1,11 +1,11 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Minimal built-in splash used while the gray boot pipeline runs. The host
+/// Minimal built-in splash used while the core boot pipeline runs. The host
 /// app SHOULD replace this with its branded loading screen by passing
-/// `splashBuilder` to [EntryGate], but the default is good enough for a
+/// `splashBuilder` to [AppGateway], but the default is good enough for a
 /// reference / template build.
 ///
 /// Lifecycle contract (mirrors what the host's branded splash must honour):
@@ -28,12 +28,12 @@ import 'package:flutter/services.dart';
 ///   • [contentReady] has a hard timeout — the splash MUST hand over even if
 ///     the readiness signal never arrives, otherwise a silently-broken
 ///     WebView would lock the user on the splash forever.
-class DefaultGraySplash extends StatefulWidget {
+class BuiltinSplash extends StatefulWidget {
   final Future<WidgetBuilder>? routeFuture;
   final Future<void>? contentReady;
   final Future<bool>? keepAsUnderlay;
 
-  const DefaultGraySplash({
+  const BuiltinSplash({
     super.key,
     this.routeFuture,
     this.contentReady,
@@ -41,10 +41,10 @@ class DefaultGraySplash extends StatefulWidget {
   });
 
   @override
-  State<DefaultGraySplash> createState() => _DefaultGraySplashState();
+  State<BuiltinSplash> createState() => _BuiltinSplashState();
 }
 
-class _DefaultGraySplashState extends State<DefaultGraySplash>
+class _BuiltinSplashState extends State<BuiltinSplash>
     with SingleTickerProviderStateMixin {
   // The bar always animates for at least this long so the visual transition
   // never looks like a stutter even when the boot pipeline finishes instantly.
@@ -159,7 +159,7 @@ class _DefaultGraySplashState extends State<DefaultGraySplash>
     }
 
     final builder =
-        _resolvedBuilder ?? (_) => const _GrayDefaultEmptyHome();
+        _resolvedBuilder ?? (_) => const _BuiltinEmptyHome();
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
@@ -262,8 +262,8 @@ class _DefaultGraySplashState extends State<DefaultGraySplash>
 /// Last-resort fallback when the host did not provide a `fallbackHomeBuilder`
 /// AND the route resolver itself produced no widget. In a real integration
 /// this is never reached.
-class _GrayDefaultEmptyHome extends StatelessWidget {
-  const _GrayDefaultEmptyHome();
+class _BuiltinEmptyHome extends StatelessWidget {
+  const _BuiltinEmptyHome();
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +271,7 @@ class _GrayDefaultEmptyHome extends StatelessWidget {
       backgroundColor: Colors.black,
       body: Center(
         child: Text(
-          'Gray flow: no host home configured.',
+          'core flow: no host home configured.',
           style: TextStyle(color: Colors.white70),
         ),
       ),

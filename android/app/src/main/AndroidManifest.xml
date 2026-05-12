@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Internet access for the gray gateway, WebView, and FCM. -->
+    <!-- Internet access for gateway, WebView, and FCM. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <!-- Android 13+ runtime push-notification permission (requested from Dart
@@ -12,11 +12,11 @@
         android:label="TowerBalance"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:networkSecurityConfig="@xml/gray_network_policy"
+        android:networkSecurityConfig="@xml/core_net_policy"
         android:enableOnBackInvokedCallback="true"
         android:allowBackup="false"
         android:fullBackupContent="false"
-        android:dataExtractionRules="@xml/gray_data_extraction"
+        android:dataExtractionRules="@xml/core_data_rules"
         android:extractNativeLibs="false"
         tools:replace="android:allowBackup,android:fullBackupContent,android:dataExtractionRules">
 
@@ -30,7 +30,7 @@
             android:hardwareAccelerated="true"
             android:screenOrientation="fullUser"
             android:windowSoftInputMode="adjustPan">
-            <!-- adjustPan instead of adjustResize: the gray WebView (PlatformView)
+            <!-- adjustPan instead of adjustResize: the core WebView (PlatformView)
                  re-layouts on every window resize, which causes visible jitter when
                  the soft keyboard animates in. adjustPan slides the window up
                  without resizing — no jitter. JS in BrowserShell still scrolls the
@@ -45,15 +45,15 @@
         </activity>
 
         <!-- FCM: tray icon shown on incoming pushes. MUST match the drawable
-             name used in pulse_dispatch.dart (pulseIconRes). -->
+             name used in push_agent.dart (pushIconRes). -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_pulse_notification"/>
         <!-- FCM: channel that background pushes are delivered to. MUST match
-             pulseChannelId in pulse_dispatch.dart. -->
+             pushChannelId in push_agent.dart. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="gray_pulse_channel"/>
+            android:value="tbl_push_ch"/>
 
         <!-- Flutter embedding version -->
         <meta-data

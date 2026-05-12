@@ -1,18 +1,18 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import '../utils/byte_unmask.dart';
-import 'gateway_endpoints.dart';
+import 'gate_config.dart';
 
-/// Per-brand constants that control the gray boot flow.
+/// Per-brand constants that control the core boot flow.
 ///
 /// Values that need to stay private (AppsFlyer dev key, Firebase project
 /// number) are stored as obfuscated byte arrays — use
 /// `dart run tool/encode_keys.dart` to generate them.
 ///
 /// Until the brand owner ships the real keys, the arrays are empty and
-/// [gateEnabled] returns `false`. In that state [GrayBoot.buildHome]
+/// [gateEnabled] returns `false`. In that state [CoreEngine.buildHome]
 /// short-circuits straight to the host's `fallbackHomeBuilder`, so the app
-/// stays fully functional even before the gray flow has been provisioned.
+/// stays fully functional even before the core flow has been provisioned.
 
 // AppsFlyer Android dev key (z5SHQaYKs6AiNHfimgtsqH — encoded).
 const List<int> _installKeyAndroid = [238, 31, 224, 41, 195, 214, 116, 36, 174, 229, 198, 203, 31, 75, 168, 153, 192, 74, 155, 195, 254, 208];
@@ -27,7 +27,7 @@ const List<int> _firebaseProjectAndroid = [173, 28, 135, 81, 166, 134, 27, 88, 2
 // TODO: iOS Firebase project number (leave empty for Android-only builds).
 const List<int> _firebaseProjectIos = <int>[];
 
-abstract final class RuntimeBrand {
+abstract final class BrandCore {
   /// Android applicationId — MUST match `android/app/build.gradle.kts` and
   /// `android/app/src/main/AndroidManifest.xml`.
   static const String packageName = 'krwl.twr.balance';
@@ -35,7 +35,7 @@ abstract final class RuntimeBrand {
   /// Store-side identifier sent in gateway payloads.
   static const String storeIdentifier = 'krwl.twr.balance';
 
-  /// Display name used in any user-facing copy the gray flow renders.
+  /// Display name used in any user-facing copy the core flow renders.
   static const String displayTitle = 'TowerBalance';
 
   /// App Store numeric ID — used on iOS for AppsFlyer `AppsFlyerOptions.appId`.
@@ -65,10 +65,10 @@ abstract final class RuntimeBrand {
   static String get privacyUrl => brandPrivacyUrl;
   static String get supportUrl => brandSupportUrl;
 
-  /// `true` when at least one piece of the gray gate has been provisioned.
-  /// [GrayBoot.buildHome] consults this to decide whether to mount the gray
+  /// `true` when at least one piece of the core gate has been provisioned.
+  /// [CoreEngine.buildHome] consults this to decide whether to mount the core
   /// entry gate at all — when `false` (no keys yet) the host app's
-  /// `fallbackHomeBuilder` is rendered directly, with zero gray overhead.
+  /// `fallbackHomeBuilder` is rendered directly, with zero core overhead.
   static bool get gateEnabled =>
       configUrl.isNotEmpty || installDevKey.isNotEmpty;
 }

@@ -1,9 +1,9 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:http/http.dart' as http;
 
-import '../config/runtime_brand.dart';
+import '../config/brand_core.dart';
 
 String _composeAndroidUa({
   required int sdk,
@@ -11,14 +11,14 @@ String _composeAndroidUa({
   required String model,
   required String build,
 }) {
-  final chrome = RuntimeBrand.chromeBuild;
+  final chrome = BrandCore.chromeBuild;
   return 'Mozilla/5.0 (Linux; Android $sdk; $brand $model Build/$build) '
       'AppleWebKit/537.36 (KHTML, like Gecko) '
       'Chrome/$chrome Mobile Safari/537.36';
 }
 
 String _composeIosUa(String systemVersion) {
-  final safari = RuntimeBrand.safariBuild;
+  final safari = BrandCore.safariBuild;
   final dotless = systemVersion.replaceAll('.', '_');
   return 'Mozilla/5.0 (iPhone; CPU iPhone OS $dotless like Mac OS X) '
       'AppleWebKit/$safari (KHTML, like Gecko) '
@@ -40,7 +40,7 @@ String _stockUa() {
 /// HTTP client that injects a believable mobile-browser User-Agent on every
 /// outbound request. Produces a different UA from the white build so the
 /// server fingerprint stays distinct.
-class SecureHttp extends http.BaseClient {
+class SafeHttp extends http.BaseClient {
   final http.Client _delegate = http.Client();
   String _userAgent = '';
 
@@ -83,4 +83,4 @@ class SecureHttp extends http.BaseClient {
   void close() => _delegate.close();
 }
 
-final SecureHttp secureHttp = SecureHttp();
+final SafeHttp safeNet = SafeHttp();

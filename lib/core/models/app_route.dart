@@ -1,33 +1,33 @@
-/// Persisted decision about how the app should boot on subsequent runs.
+﻿/// Persisted decision about how the app should boot on subsequent runs.
 ///
 /// `web` opens the WebView, `arcade` jumps directly into the Tower Falls
 /// game, `pristine` means the gateway has not answered yet.
-enum LaunchRoute {
+enum AppRoute {
   web,
   arcade,
   pristine;
 
   String storageId() {
     switch (this) {
-      case LaunchRoute.web:
+      case AppRoute.web:
         return 'web';
-      case LaunchRoute.arcade:
+      case AppRoute.arcade:
         return 'arcade';
-      case LaunchRoute.pristine:
+      case AppRoute.pristine:
         return 'pristine';
     }
   }
 
-  static LaunchRoute decode(String? raw) {
+  static AppRoute decode(String? raw) {
     switch (raw) {
       case 'web':
       case 'browser':
-        return LaunchRoute.web;
+        return AppRoute.web;
       case 'arcade':
       case 'game':
-        return LaunchRoute.arcade;
+        return AppRoute.arcade;
       default:
-        return LaunchRoute.pristine;
+        return AppRoute.pristine;
     }
   }
 }

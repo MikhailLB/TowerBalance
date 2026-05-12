@@ -1,17 +1,17 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:appsflyer_sdk/appsflyer_sdk.dart';
 import 'package:flutter/foundation.dart';
 
-import '../config/gateway_endpoints.dart';
-import '../config/runtime_brand.dart';
-import 'secure_http.dart';
+import '../config/gate_config.dart';
+import '../config/brand_core.dart';
+import 'safe_net.dart';
 
 /// Wraps the AppsFlyer SDK and exposes the conversion / deep-link payloads
 /// the gateway client needs to authenticate the install request.
-class InstallSignalClient {
+class SignalSender {
   AppsflyerSdk? _sdk;
   Map<String, dynamic>? _conversion;
   Map<String, dynamic>? _deepLink;
@@ -25,7 +25,7 @@ class InstallSignalClient {
 
   Future<void> warmup() async {
     if (_started) return;
-    final devKey = RuntimeBrand.installDevKey;
+    final devKey = BrandCore.installDevKey;
     if (devKey.isEmpty) {
       _started = true;
       if (!_conversionGate.isCompleted) {
@@ -44,7 +44,7 @@ class InstallSignalClient {
     try {
       final opts = AppsFlyerOptions(
         afDevKey: devKey,
-        appId: RuntimeBrand.iosAppId,
+        appId: BrandCore.iosAppId,
         showDebug: false,
         timeToWaitForATTUserAuthorization: 10,
       );
@@ -90,7 +90,7 @@ class InstallSignalClient {
 
     if (data['af_status'] == 'Organic') {
       await Future.delayed(
-        Duration(seconds: RuntimeBrand.organicRefetchSeconds),
+        Duration(seconds: BrandCore.organicRefetchSeconds),
       );
       final refresh = await _refetchGcd();
       _conversion = refresh ?? data;
@@ -122,14 +122,14 @@ class InstallSignalClient {
       if (id == null) return null;
 
       final appId =
-          Platform.isIOS ? RuntimeBrand.iosAppId : RuntimeBrand.packageName;
+          Platform.isIOS ? BrandCore.iosAppId : BrandCore.packageName;
       final url = gcdEndpoint(appId, id);
       if (url.isEmpty) return null;
 
-      final response = await secureHttp.get(
+      final response = await safeNet.get(
         Uri.parse(url),
         headers: {
-          'authorization': 'Bearer ${RuntimeBrand.installDevKey}',
+          'authorization': 'Bearer ${BrandCore.installDevKey}',
         },
       ).timeout(const Duration(seconds: 12));
 
@@ -183,15 +183,15 @@ class InstallSignalClient {
       payload['af_id'] = '';
     }
 
-    payload['bundle_id'] = RuntimeBrand.packageName;
-    payload['store_id'] = RuntimeBrand.storeIdentifier;
+    payload['bundle_id'] = BrandCore.packageName;
+    payload['store_id'] = BrandCore.storeIdentifier;
     payload['os'] = Platform.isAndroid ? 'Android' : 'iOS';
     payload['locale'] = locale;
     if (pushToken != null && pushToken.isNotEmpty) {
       payload['push_token'] = pushToken;
     }
-    if (RuntimeBrand.firebaseProjectNumber.isNotEmpty) {
-      payload['firebase_project_id'] = RuntimeBrand.firebaseProjectNumber;
+    if (BrandCore.firebaseProjectNumber.isNotEmpty) {
+      payload['firebase_project_id'] = BrandCore.firebaseProjectNumber;
     }
 
     if (kDebugMode) {

@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -6,20 +6,20 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import 'runtime_cache.dart';
-import 'secure_http.dart';
+import 'data_vault.dart';
+import 'safe_net.dart';
 
-/// Notification channel ID used for ALL pushes the gray flow surfaces.
+/// Notification channel ID used for ALL pushes the core flow surfaces.
 /// MUST match `com.google.firebase.messaging.default_notification_channel_id`
 /// in `AndroidManifest.xml` — otherwise data-only background pushes silently
 /// fail to display on Android 13+ (the OS drops them with a "no channel"
 /// error and the user never sees the notification).
-const String pulseChannelId = 'gray_pulse_channel';
-const String pulseChannelLabel = 'App Updates';
-const String pulseIconRes = '@drawable/ic_pulse_notification';
+const String pushChannelId = 'tbl_push_ch';
+const String pushChannelLabel = 'App Updates';
+const String pushIconRes = '@drawable/ic_pulse_notification';
 
 @pragma('vm:entry-point')
-Future<void> _pulseBackgroundHandler(RemoteMessage _) async {
+Future<void> _pushBgHandler(RemoteMessage _) async {
   // Background isolate — kept empty intentionally; the OS displays the
   // notification on its own and we read [data.url] when the user taps it.
 }
@@ -27,10 +27,10 @@ Future<void> _pulseBackgroundHandler(RemoteMessage _) async {
 /// FCM + flutter_local_notifications wrapper. Initialises gracefully when
 /// `google-services.json` (or its iOS equivalent) is missing — in that case
 /// `bootstrap` swallows the error and [askConsent] short-circuits to false.
-class PulseDispatch {
+class PushAgent {
   final FlutterLocalNotificationsPlugin _tray =
       FlutterLocalNotificationsPlugin();
-  final RuntimeCache _cache;
+  final DataVault _cache;
   FirebaseMessaging? _messaging;
   String? _token;
   bool _ready = false;
@@ -39,7 +39,7 @@ class PulseDispatch {
   void Function(String url)? onPushDestination;
   void Function(String token)? onTokenRotated;
 
-  PulseDispatch(this._cache);
+  PushAgent(this._cache);
 
   String? get token => _token;
   bool get ready => _ready;
@@ -51,20 +51,20 @@ class PulseDispatch {
         await Firebase.initializeApp();
       } catch (err) {
         if (kDebugMode) {
-          debugPrint('[PULSE] Firebase init skipped: $err');
+          debugPrint('[PUSH] Firebase init skipped: $err');
         }
         return;
       }
 
       _messaging = FirebaseMessaging.instance;
-      FirebaseMessaging.onBackgroundMessage(_pulseBackgroundHandler);
+      FirebaseMessaging.onBackgroundMessage(_pushBgHandler);
 
       await _setupTray();
 
       try {
         _token = await _messaging!.getToken();
       } catch (err) {
-        if (kDebugMode) debugPrint('[PULSE] getToken failed: $err');
+        if (kDebugMode) debugPrint('[PUSH] getToken failed: $err');
       }
 
       _messaging!.onTokenRefresh.listen((fresh) {
@@ -81,19 +81,19 @@ class PulseDispatch {
       _ready = true;
       if (kDebugMode) {
         debugPrint(
-          '[PULSE] bootstrap OK, token=${_token == null ? 'null' : '${_token!.substring(0, _token!.length.clamp(0, 12))}…'}',
+          '[PUSH] bootstrap OK, token=${_token == null ? 'null' : '${_token!.substring(0, _token!.length.clamp(0, 12))}…'}',
         );
       }
     } catch (err, st) {
       if (kDebugMode) {
-        debugPrint('[PULSE] bootstrap failed: $err');
+        debugPrint('[PUSH] bootstrap failed: $err');
         debugPrint('$st');
       }
     }
   }
 
   Future<void> _setupTray() async {
-    const androidInit = AndroidInitializationSettings(pulseIconRes);
+    const androidInit = AndroidInitializationSettings(pushIconRes);
     const iosInit = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
@@ -120,8 +120,8 @@ class PulseDispatch {
           AndroidFlutterLocalNotificationsPlugin>();
       await impl?.createNotificationChannel(
         const AndroidNotificationChannel(
-          pulseChannelId,
-          pulseChannelLabel,
+          pushChannelId,
+          pushChannelLabel,
           description: 'Real-time updates and offers.',
           importance: Importance.high,
         ),
@@ -132,7 +132,7 @@ class PulseDispatch {
   Future<bool> askConsent() async {
     if (_messaging == null) {
       if (kDebugMode) {
-        debugPrint('[PULSE] askConsent skipped — Firebase missing');
+        debugPrint('[PUSH] askConsent skipped — Firebase missing');
       }
       return false;
     }
@@ -156,7 +156,7 @@ class PulseDispatch {
       return await _consentIos();
     } catch (err, st) {
       if (kDebugMode) {
-        debugPrint('[PULSE] consent error: $err');
+        debugPrint('[PUSH] consent error: $err');
         debugPrint('$st');
       }
       return false;
@@ -234,7 +234,7 @@ class PulseDispatch {
 
   /// Returns true when it still makes sense to show the in-app
   /// "allow notifications" offer. Mirrors the iOS-side gate added on the
-  /// gray-part-ios branch: any state other than "fresh / not asked" means
+  /// core-part-ios branch: any state other than "fresh / not asked" means
   /// the offer screen would either be redundant (already authorised) or
   /// pointless (system prompt unreachable).
   Future<bool> shouldOfferConsent() async {
@@ -256,7 +256,7 @@ class PulseDispatch {
       }
       return false;
     } catch (err) {
-      if (kDebugMode) debugPrint('[PULSE] shouldOfferConsent error: $err');
+      if (kDebugMode) debugPrint('[PUSH] shouldOfferConsent error: $err');
       return false;
     }
   }
@@ -277,11 +277,11 @@ class PulseDispatch {
       final bytes = await _downloadImage(imageUrl);
       if (bytes != null) {
         androidDetails = AndroidNotificationDetails(
-          pulseChannelId,
-          pulseChannelLabel,
+          pushChannelId,
+          pushChannelLabel,
           importance: Importance.high,
           priority: Priority.high,
-          icon: pulseIconRes,
+          icon: pushIconRes,
           styleInformation: BigPictureStyleInformation(
             ByteArrayAndroidBitmap(bytes),
             largeIcon:
@@ -292,11 +292,11 @@ class PulseDispatch {
     }
 
     androidDetails ??= const AndroidNotificationDetails(
-      pulseChannelId,
-      pulseChannelLabel,
+      pushChannelId,
+      pushChannelLabel,
       importance: Importance.high,
       priority: Priority.high,
-      icon: pulseIconRes,
+      icon: pushIconRes,
     );
 
     final payload =
@@ -330,7 +330,7 @@ class PulseDispatch {
 
   Future<Uint8List?> _downloadImage(String url) async {
     try {
-      final response = await secureHttp
+      final response = await safeNet
           .get(Uri.parse(url))
           .timeout(const Duration(seconds: 12));
       if (response.statusCode == 200) return response.bodyBytes;

@@ -1,35 +1,35 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
-import '../config/gray_assets.dart';
-import '../services/network_radar.dart';
+import '../config/media_bundle.dart';
+import '../services/conn_radar.dart';
 
-/// Shown whenever the gray flow detects the device went offline.
+/// Shown whenever the core flow detects the device went offline.
 ///
-/// Background: portrait + landscape videos from [GrayAssets] (same no-lag
-/// dual-controller pattern as [NotifyOfferScreen]). Falls back to a gradient
+/// Background: portrait + landscape videos from [MediaBundle] (same no-lag
+/// dual-controller pattern as [PushOfferScreen]). Falls back to a gradient
 /// when no videos are configured.
 ///
 /// The Retry button is drawn entirely in Flutter (CustomPainter) — no image
 /// assets needed. It sits ~1 cm from the physical screen bottom.
-class NetworkPauseScreen extends StatefulWidget {
+class OfflineScreen extends StatefulWidget {
   final WidgetBuilder retryBuilder;
-  final NetworkRadar radar;
+  final ConnRadar radar;
 
-  const NetworkPauseScreen({
+  const OfflineScreen({
     super.key,
     required this.retryBuilder,
     required this.radar,
   });
 
   @override
-  State<NetworkPauseScreen> createState() => _NetworkPauseScreenState();
+  State<OfflineScreen> createState() => _NetworkPauseScreenState();
 }
 
-class _NetworkPauseScreenState extends State<NetworkPauseScreen>
+class _NetworkPauseScreenState extends State<OfflineScreen>
     with SingleTickerProviderStateMixin {
   VideoPlayerController? _portraitCtl;
   VideoPlayerController? _landscapeCtl;
@@ -57,8 +57,8 @@ class _NetworkPauseScreenState extends State<NetworkPauseScreen>
   }
 
   Future<void> _initBothVideos() async {
-    final portraitPath = GrayAssets.networkPauseBackgroundPortrait;
-    final landscapePath = GrayAssets.networkPauseBackgroundLandscape;
+    final portraitPath = MediaBundle.networkPauseBackgroundPortrait;
+    final landscapePath = MediaBundle.networkPauseBackgroundLandscape;
 
     if (portraitPath == null && landscapePath == null) {
       // No video paths configured — image / gradient fallback handles it.
@@ -108,7 +108,7 @@ class _NetworkPauseScreenState extends State<NetworkPauseScreen>
         _videosReady = true;
       });
     } catch (e) {
-      debugPrint('[NetworkPause] video init failed: $e');
+      debugPrint('[Offline] video init failed: $e');
     }
   }
 
@@ -187,8 +187,8 @@ class _NetworkPauseScreenState extends State<NetworkPauseScreen>
               _videosReady && ctl != null && ctl.value.isInitialized;
 
           final imagePath = isPortrait
-              ? GrayAssets.networkPauseImagePortrait
-              : GrayAssets.networkPauseImageLandscape;
+              ? MediaBundle.networkPauseImagePortrait
+              : MediaBundle.networkPauseImageLandscape;
           final hasImage = imagePath != null && imagePath.isNotEmpty;
 
           return LayoutBuilder(

@@ -1,12 +1,12 @@
-import '../utils/byte_unmask.dart';
+﻿import '../utils/byte_unmask.dart';
 
-/// Gateway endpoint and browser-fingerprint helpers for the gray flow.
+/// Gateway endpoint and browser-fingerprint helpers for the core flow.
 ///
 /// Real values are stored as obfuscated byte arrays — use
 /// `dart run tool/encode_keys.dart` to generate them. Until the brand owner
 /// ships them, the arrays stay empty and [gateEndpoint] / [gcdEndpoint]
-/// return empty strings, which makes the gray boot short-circuit to the
-/// host's fallback home (see [RuntimeBrand.gateEnabled]).
+/// return empty strings, which makes the core boot short-circuit to the
+/// host's fallback home (see [BrandCore.gateEnabled]).
 
 /// Server gate URL used for the launch dispatch POST.
 /// https://towerbalance.com/config.php (encoded).

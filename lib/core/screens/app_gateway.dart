@@ -1,66 +1,66 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../models/launch_route.dart';
-import '../services/install_signal_client.dart';
-import '../services/network_radar.dart';
-import '../services/pulse_dispatch.dart';
-import '../services/remote_gate_client.dart';
-import '../services/runtime_cache.dart';
-import 'browser_shell.dart';
-import 'default_splash.dart';
-import 'network_pause_screen.dart';
-import 'notify_offer_screen.dart';
+import '../models/app_route.dart';
+import '../services/signal_sender.dart';
+import '../services/conn_radar.dart';
+import '../services/push_agent.dart';
+import '../services/route_client.dart';
+import '../services/data_vault.dart';
+import 'app_browser.dart';
+import 'builtin_splash.dart';
+import 'offline_screen.dart';
+import 'push_offer_screen.dart';
 
-/// Builder signature for the loading splash shown while the gray pipeline
+/// Builder signature for the loading splash shown while the core pipeline
 /// (push bootstrap, AppsFlyer warmup, gate dispatch) is in flight.
 ///
 /// The host's splash widget MUST honour all four arguments:
 ///
 ///   • [routeFuture] — completes with the resolved page builder; the splash
 ///     should not navigate until this resolves.
-///   • [contentReady] — completes when the resolved widget (e.g. BrowserShell)
+///   • [contentReady] — completes when the resolved widget (e.g. AppBrowser)
 ///     has rendered its first paint. The splash should keep itself visible
 ///     until both [routeFuture] and [contentReady] are settled.
 ///   • [keepAsUnderlay] — if `true`, the splash must mount the resolved
 ///     widget underneath itself before fading out (so a WebView keeps its
 ///     state across the handover). If `false`, use `Navigator.pushReplacement`.
 ///
-/// See [DefaultGraySplash] for a reference implementation. When this builder
+/// See [BuiltinSplash] for a reference implementation. When this builder
 /// is null, the default is used.
-typedef GraySplashBuilder = Widget Function(
+typedef SplashFactory = Widget Function(
   Future<WidgetBuilder> routeFuture,
   Future<void> contentReady,
   Future<bool> keepAsUnderlay,
 );
 
-/// Entry point for the gray boot flow.
+/// Entry point for the core boot flow.
 ///
 /// The flow decides on every launch whether to:
 ///   • show the host app's `fallbackHomeBuilder` (organic / no destination), or
-///   • open the [BrowserShell] with a destination URL returned by the gateway.
+///   • open the [AppBrowser] with a destination URL returned by the gateway.
 ///
-/// While the decision is being made, [splashBuilder] (or [DefaultGraySplash]
+/// While the decision is being made, [splashBuilder] (or [BuiltinSplash]
 /// if null) is shown so the user sees a single uninterrupted loading screen.
-class EntryGate extends StatefulWidget {
-  final RuntimeCache cache;
-  final NetworkRadar radar;
-  final InstallSignalClient install;
-  final RemoteGateClient gate;
-  final PulseDispatch pulse;
+class AppGateway extends StatefulWidget {
+  final DataVault cache;
+  final ConnRadar radar;
+  final SignalSender install;
+  final RouteClient gate;
+  final PushAgent pulse;
 
-  /// Required: the host app's "regular" home screen, opened when the gray
+  /// Required: the host app's "regular" home screen, opened when the core
   /// flow concludes the user is organic / there is no destination URL.
   final WidgetBuilder fallbackHomeBuilder;
 
-  /// Optional: replace the splash widget. If null, [DefaultGraySplash] is
-  /// used. See [GraySplashBuilder] for the contract it must honour.
-  final GraySplashBuilder? splashBuilder;
+  /// Optional: replace the splash widget. If null, [BuiltinSplash] is
+  /// used. See [SplashFactory] for the contract it must honour.
+  final SplashFactory? splashBuilder;
 
-  const EntryGate({
+  const AppGateway({
     super.key,
     required this.cache,
     required this.radar,
@@ -72,13 +72,13 @@ class EntryGate extends StatefulWidget {
   });
 
   @override
-  State<EntryGate> createState() => _EntryGateState();
+  State<AppGateway> createState() => _EntryGateState();
 }
 
-class _EntryGateState extends State<EntryGate> {
+class _EntryGateState extends State<AppGateway> {
   late final Future<WidgetBuilder> _routeFuture;
   // Completes once the resolved underlay widget is fully on-screen. For the
-  // BrowserShell case this fires on the first WebView onPageFinished; for
+  // AppBrowser case this fires on the first WebView onPageFinished; for
   // any other route it is completed eagerly in [_kickoff] so the loading
   // splash hands over without an extra wait.
   final Completer<void> _contentReady = Completer<void>();
@@ -90,7 +90,7 @@ class _EntryGateState extends State<EntryGate> {
 
   void _markContentReady([String reason = 'eager']) {
     if (_contentReady.isCompleted) return;
-    if (kDebugMode) debugPrint('[EntryGate] contentReady: $reason');
+    if (kDebugMode) debugPrint('[AppGateway] contentReady: $reason');
     _contentReady.complete();
   }
 
@@ -111,26 +111,26 @@ class _EntryGateState extends State<EntryGate> {
     try {
       await widget.pulse.bootstrap();
     } catch (err) {
-      if (kDebugMode) debugPrint('[EntryGate] pulse bootstrap failed: $err');
+      if (kDebugMode) debugPrint('[AppGateway] pulse bootstrap failed: $err');
     }
 
     WidgetBuilder builder;
     try {
       final route = widget.cache.readRoute();
       switch (route) {
-        case LaunchRoute.web:
+        case AppRoute.web:
           builder = await _runReturningWebFlow();
           break;
-        case LaunchRoute.arcade:
+        case AppRoute.arcade:
           builder = widget.fallbackHomeBuilder;
           break;
-        case LaunchRoute.pristine:
+        case AppRoute.pristine:
           builder = await _runFirstLaunchFlow();
           break;
       }
     } catch (err, st) {
       if (kDebugMode) {
-        debugPrint('[EntryGate] kickoff failed: $err\n$st');
+        debugPrint('[AppGateway] kickoff failed: $err\n$st');
       }
       builder = widget.fallbackHomeBuilder;
     }
@@ -138,7 +138,7 @@ class _EntryGateState extends State<EntryGate> {
     // Non-web routes don't have their own readiness signal — fire the
     // contentReady gate immediately so the loading splash hands over as
     // soon as the progress bar finishes. Web routes set [_isWebFlow] in
-    // [_webBuilder] and own the signal via BrowserShell.onFirstPaint.
+    // [_webBuilder] and own the signal via AppBrowser.onFirstPaint.
     if (!_isWebFlow) {
       _markContentReady('non-web route');
     }
@@ -167,10 +167,10 @@ class _EntryGateState extends State<EntryGate> {
     final reply = await widget.gate.dispatch(body);
 
     if (reply.granted && reply.destination != null) {
-      await widget.cache.writeRoute(LaunchRoute.web);
+      await widget.cache.writeRoute(AppRoute.web);
       return await _webBuilder(reply.destination!);
     }
-    await widget.cache.writeRoute(LaunchRoute.arcade);
+    await widget.cache.writeRoute(AppRoute.arcade);
     return widget.fallbackHomeBuilder;
   }
 
@@ -218,10 +218,10 @@ class _EntryGateState extends State<EntryGate> {
     if (widget.cache.needsPushPrompt()) {
       final canAsk = await widget.pulse.shouldOfferConsent();
       if (kDebugMode) {
-        debugPrint('[EntryGate] push offer gate: canAsk=$canAsk');
+        debugPrint('[AppGateway] push offer gate: canAsk=$canAsk');
       }
       if (canAsk) {
-        return (_) => NotifyOfferScreen(
+        return (_) => PushOfferScreen(
               cache: widget.cache,
               pulse: widget.pulse,
               radar: widget.radar,
@@ -229,11 +229,11 @@ class _EntryGateState extends State<EntryGate> {
             );
       }
     }
-    // BrowserShell signals readiness via [onFirstPaint] so the loading
+    // AppBrowser signals readiness via [onFirstPaint] so the loading
     // splash stays up until the WebView has actually rendered the first
     // page.
     _isWebFlow = true;
-    return (_) => BrowserShell(
+    return (_) => AppBrowser(
           destination: url,
           cache: widget.cache,
           pulse: widget.pulse,
@@ -243,9 +243,9 @@ class _EntryGateState extends State<EntryGate> {
   }
 
   WidgetBuilder _offlineBuilder({required bool returnAsFirstLaunch}) {
-    return (_) => NetworkPauseScreen(
+    return (_) => OfflineScreen(
           radar: widget.radar,
-          retryBuilder: (_) => EntryGate(
+          retryBuilder: (_) => AppGateway(
             cache: widget.cache,
             radar: widget.radar,
             install: widget.install,
@@ -275,7 +275,7 @@ class _EntryGateState extends State<EntryGate> {
         _keepUnderlay.future,
       );
     }
-    return DefaultGraySplash(
+    return BuiltinSplash(
       routeFuture: _routeFuture,
       contentReady: _contentReady.future,
       keepAsUnderlay: _keepUnderlay.future,

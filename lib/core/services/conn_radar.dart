@@ -1,11 +1,11 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 /// Tiny wrapper around `connectivity_plus` that performs an actual DNS lookup
 /// before reporting that the device is online. Without the lookup we get
 /// false positives on captive portals or stale connectivity events.
-class NetworkRadar {
+class ConnRadar {
   final Connectivity _probe = Connectivity();
 
   Future<bool> isReachable() async {

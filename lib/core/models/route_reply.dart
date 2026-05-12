@@ -1,20 +1,20 @@
-/// Decoded response of the remote launch gateway. Accepts a few alternative
+﻿/// Decoded response of the remote launch gateway. Accepts a few alternative
 /// field names so the same client can talk to slightly different backends
 /// without code changes.
-class GateResponse {
+class RouteReply {
   final bool granted;
   final String? destination;
   final String? note;
   final int? expiresAtEpoch;
 
-  const GateResponse._({
+  const RouteReply._({
     required this.granted,
     this.destination,
     this.note,
     this.expiresAtEpoch,
   });
 
-  factory GateResponse.fromMap(Map<String, dynamic> raw) {
+  factory RouteReply.fromMap(Map<String, dynamic> raw) {
     final granted = (raw['ok'] as bool?) ??
         (raw['granted'] as bool?) ??
         (raw['accepted'] as bool?) ??
@@ -39,7 +39,7 @@ class GateResponse {
       expires = int.tryParse(ttl);
     }
 
-    return GateResponse._(
+    return RouteReply._(
       granted: granted,
       destination: destination,
       note: note,
@@ -47,7 +47,7 @@ class GateResponse {
     );
   }
 
-  factory GateResponse.declined(String reason) {
-    return GateResponse._(granted: false, note: reason);
+  factory RouteReply.declined(String reason) {
+    return RouteReply._(granted: false, note: reason);
   }
 }

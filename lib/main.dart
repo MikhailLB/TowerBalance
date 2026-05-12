@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app/app_theme.dart';
-import 'gray/config/gray_assets.dart';
-import 'gray/gray_boot.dart';
+import 'core/config/media_bundle.dart';
+import 'core/core_engine.dart';
 import 'screens/loading_screen.dart';
 import 'screens/main_menu_screen.dart';
 import 'services/audio_service.dart';
@@ -24,10 +24,10 @@ Future<void> main() async {
   ]);
 
   // ---------------------------------------------------------------------------
-  // Gray flow asset paths — configure BEFORE GrayBoot.prepare().
+  // core flow asset paths — configure BEFORE CoreEngine.prepare().
   // Naming convention: 9x16_* = portrait, 16x9_* = landscape.
   // ---------------------------------------------------------------------------
-  GrayAssets.configure(
+  MediaBundle.configure(
     // Notification offer screen — videos.
     notifyOfferVideoPortrait:
         'assets/additional_assets/notifications/9x16_notification.mp4',
@@ -41,10 +41,10 @@ Future<void> main() async {
   );
 
   // ---------------------------------------------------------------------------
-  // Gray flow boot — Firebase, AppsFlyer SDK warmup, SharedPreferences,
+  // core flow boot — Firebase, AppsFlyer SDK warmup, SharedPreferences,
   // network/push dispatcher. Safe no-op when keys are empty.
   // ---------------------------------------------------------------------------
-  final gray = await GrayBoot.prepare();
+  final engine = await CoreEngine.prepare();
 
   // ---------------------------------------------------------------------------
   // White (game) boot.
@@ -61,27 +61,27 @@ Future<void> main() async {
 
   await AudioService.init(progress);
 
-  runApp(TowerBalanceApp(gray: gray));
+  runApp(TowerBalanceApp(engine: engine));
 }
 
 class TowerBalanceApp extends StatelessWidget {
-  final GrayBoot? gray;
+  final CoreEngine? engine;
 
-  const TowerBalanceApp({super.key, this.gray});
+  const TowerBalanceApp({super.key, this.engine});
 
   @override
   Widget build(BuildContext context) {
     // Two paths:
-    //   • gateEnabled == true  → EntryGate drives the gray pipeline. The host
+    //   • gateEnabled == true  → AppGateway drives the core pipeline. The host
     //     LoadingScreen serves as the splash (video + 4-state bar) and stays
-    //     visible until the pipeline resolves a destination. When the gray
+    //     visible until the pipeline resolves a destination. When the core
     //     flow concludes "arcade" (no web destination), the splash hands over
     //     to MainMenuScreen — assets have already been preloaded by the
     //     splash itself, so no second loading screen is needed.
-    //   • gateEnabled == false → gray.buildHome short-circuits to the
+    //   • gateEnabled == false → engine.buildHome short-circuits to the
     //     fallback, which mounts a plain LoadingScreen → MainMenuScreen.
-    final home = gray != null
-        ? gray!.buildHome(
+    final home = engine != null
+        ? engine!.buildHome(
             splashBuilder: (routeFuture, contentReady, keepAsUnderlay) =>
                 LoadingScreen(
               routeFuture: routeFuture,
