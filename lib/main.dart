@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 
-import 'app/app_orientation.dart';import 'app/app_theme.dart';
+import 'app/app_orientation.dart';
+import 'app/app_theme.dart';
 import 'screens/loading_screen.dart';
 import 'services/audio_service.dart';
 import 'services/storage_service.dart';
@@ -12,8 +13,9 @@ late final GameProgress progress;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Allow rotation everywhere except gameplay (see [GameScreen]).
-  await setAppOrientationsForNonGame();
+  // Home is [LoadingScreen] — allow rotation there only; next routes lock
+  // portrait (see main_menu_screen / game_screen).
+  await setOrientationsForLoadingScreens();
 
   final storage = await StorageService.create();
   progress = GameProgress(storage);

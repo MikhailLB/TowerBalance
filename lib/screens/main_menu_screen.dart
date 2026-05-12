@@ -13,8 +13,8 @@ import 'info_web_screen.dart';
 import 'settings_screen.dart';
 import 'shop_screen.dart';
 
-/// Main menu shown after the loading splash. Allows rotation; only
-/// [GameScreen] locks to portrait.
+/// Main menu shown after the loading splash. Portrait-only — rotation is
+/// allowed only on [LoadingScreen].
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
 
@@ -29,7 +29,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
   @override
   void initState() {
     super.initState();
-    setAppOrientationsForNonGame();
+    setOrientationsLockedPortrait();
     _floatController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),

@@ -43,7 +43,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
-    setAppOrientationsForGameplay();
+    setOrientationsLockedPortrait();
     // Defer the Flame world creation until after the route transition has
     // finished painting. Otherwise we try to spin up Forge2D + load textures
     // mid-animation which can stall the UI thread for hundreds of ms.
@@ -59,7 +59,7 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   void dispose() {
-    unawaited(setAppOrientationsForNonGame());
+    unawaited(setOrientationsLockedPortrait());
     super.dispose();
   }
 

@@ -1,11 +1,11 @@
 import 'package:flutter/services.dart';
 
-/// Loading splash, menu, shop, settings, and in-app WebViews may use both
-/// portrait and landscape (separate assets / layouts per orientation).
+/// Loading splash only — separate portrait/landscape video assets may rotate.
 ///
-/// [GameScreen] locks to portrait only — the Flame/Forge2D world is authored
-/// for a tall phone aspect ratio.
-Future<void> setAppOrientationsForNonGame() {
+/// Menu, shop, settings, in-app WebViews, and [GameScreen] use
+/// [setOrientationsLockedPortrait] so the game never offers horizontal layout
+/// on iOS or Android.
+Future<void> setOrientationsForLoadingScreens() {
   return SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -14,7 +14,7 @@ Future<void> setAppOrientationsForNonGame() {
   ]);
 }
 
-Future<void> setAppOrientationsForGameplay() {
+Future<void> setOrientationsLockedPortrait() {
   return SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
   ]);

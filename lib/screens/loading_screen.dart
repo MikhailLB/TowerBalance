@@ -56,7 +56,7 @@ class _LoadingScreenState extends State<LoadingScreen>
   @override
   void initState() {
     super.initState();
-    setAppOrientationsForNonGame();
+    setOrientationsForLoadingScreens();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
     _progressController = AnimationController(
