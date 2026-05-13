@@ -36,6 +36,8 @@ workflows:
       branch_patterns:
         - pattern: "main"
           include: true
+        - pattern: "grey-ios"
+          include: true
 
     scripts:
       - name: Prepare Android signing
@@ -88,15 +90,8 @@ workflows:
       - build/app/outputs/flutter-apk/*.apk
       - build/ios/ipa/*.ipa
 
-    # publishing:
-    #   email:
-    #     recipients: [ you@example.com ]
-    #     notify: { success: true, failure: true }
-    #   google_play:
-    #     credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-    #     track: internal
-    #   app_store_connect:
-    #     auth: integration
-    #     api_key: <App_Store_Connect_API_key_integration_name>
-    #     apple_id: 6768463410
-    #     submit_to_testflight: true
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        expire_build_submitted_for_review: true
