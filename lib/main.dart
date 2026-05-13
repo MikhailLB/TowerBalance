@@ -58,10 +58,6 @@ Future<void> main() async {
   // White (game) initialisation — game progress, audio service.
   final storage = await StorageService.create();
   progress = GameProgress(storage);
-  const debugCoinFloor = 10000;
-  if (progress.coins < debugCoinFloor) {
-    await progress.addCoins(debugCoinFloor - progress.coins);
-  }
   await AudioService.init(progress);
 
   // Gray (gate) initialisation — run heavy independent steps in parallel.

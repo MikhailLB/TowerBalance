@@ -78,7 +78,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       MaterialPageRoute<void>(
         builder: (_) => const InfoWebScreen(
           title: 'Privacy Policy',
-          url: 'https://towerbalance.com/privacy-policy.html',
+          url: 'https://towerbalancebuildhold.com/privacy-policy.html',
         ),
       ),
     );
@@ -90,7 +90,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
       MaterialPageRoute<void>(
         builder: (_) => const InfoWebScreen(
           title: 'Support',
-          url: 'https://towerbalance.com/support.html',
+          url: 'https://towerbalancebuildhold.com/support.html',
         ),
       ),
     );
