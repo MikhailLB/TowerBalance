@@ -411,7 +411,14 @@ class PulseDispatch {
       // iOS / fallback
       final settings = await m.getNotificationSettings();
       final status = settings.authorizationStatus;
-      if (status == AuthorizationStatus.notDetermined) return true;
+      // Show the offer screen when:
+      //   • notDetermined — first time, system prompt hasn't been shown.
+      //   • provisional   — silent delivery was registered at boot; we need
+      //     to upgrade to full auth (alert+badge+sound) via the offer screen.
+      if (status == AuthorizationStatus.notDetermined ||
+          status == AuthorizationStatus.provisional) {
+        return true;
+      }
       if (status == AuthorizationStatus.denied) {
         // System prompt cannot be shown again — bury the offer for a year.
         await _cache.writePushCooldownUntil(
@@ -495,13 +502,19 @@ class PulseDispatch {
       return false;
     }
 
-    if (status != AuthorizationStatus.notDetermined) {
-      final ok = status == AuthorizationStatus.authorized ||
-          status == AuthorizationStatus.provisional;
-      await _cache.writePushConsent(ok);
-      return ok;
+    if (status == AuthorizationStatus.authorized) {
+      // Already fully authorized — nothing to do.
+      await _cache.writePushConsent(true);
+      return true;
     }
 
+    // Both notDetermined and provisional arrive here.
+    // • notDetermined → first-time system prompt (iOS sheet shown).
+    // • provisional   → boot-time silent registration; upgrade to full
+    //   alert+badge+sound by re-calling requestPermission(provisional:false).
+    //   iOS will show the system prompt because the user hasn't explicitly
+    //   tapped "Allow" yet — provisional registration never shows the sheet.
+    debugPrint('[PULSE] iOS requesting full notification permission (status=$status)');
     final result = await _messaging!.requestPermission(
       alert: true,
       badge: true,
