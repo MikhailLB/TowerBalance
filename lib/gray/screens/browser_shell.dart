@@ -303,33 +303,59 @@ class _BrowserShellState extends State<BrowserShell>
 (function(){
   if (window.__tfKbFix) return;
   window.__tfKbFix = true;
-  function inputLike(n){ return n && (n.tagName==='INPUT' || n.tagName==='TEXTAREA' || n.isContentEditable); }
+  function inputLike(n){
+    return n && (n.tagName==='INPUT'||n.tagName==='TEXTAREA'||n.isContentEditable);
+  }
   function focusRoll(){
     var el = document.activeElement;
     if (!inputLike(el)) return;
     var vp = window.visualViewport;
     if (vp){
       var r = el.getBoundingClientRect();
-      if (r.bottom > vp.offsetTop + vp.height - 20 || r.top < vp.offsetTop){
+      // visible viewport in layout coordinates
+      var vpTop = vp.offsetTop;
+      var vpBot = vpTop + vp.height;
+      var MARGIN = 48; // px clearance above keyboard
+      if (r.bottom > vpBot - MARGIN || r.top < vpTop + MARGIN){
         el.scrollIntoView({ behavior:'smooth', block:'center' });
+        // second pass: native scroll on the element's scroll parent
+        try {
+          var p = el.parentElement;
+          while(p && p !== document.body){
+            var style = window.getComputedStyle(p);
+            var overflow = style.overflow + style.overflowY;
+            if (/auto|scroll/.test(overflow)){
+              var pr = p.getBoundingClientRect();
+              var elMid = (r.top + r.bottom) / 2;
+              var pMid = (pr.top + pr.bottom) / 2;
+              p.scrollTop += (elMid - pMid);
+              break;
+            }
+            p = p.parentElement;
+          }
+        } catch(_){}
       }
     } else {
       el.scrollIntoView({ behavior:'smooth', block:'center' });
     }
   }
   document.addEventListener('focusin', function(e){
-    if (inputLike(e.target)){
-      setTimeout(focusRoll,250);
-      setTimeout(focusRoll,500);
-      setTimeout(focusRoll,800);
-    }
+    if (!inputLike(e.target)) return;
+    // fire at multiple checkpoints: keyboard open is async on iOS
+    [150, 350, 600, 900].forEach(function(ms){ setTimeout(focusRoll, ms); });
   });
   if (window.visualViewport){
-    var prev = window.visualViewport.height;
+    var prevH = window.visualViewport.height;
     window.visualViewport.addEventListener('resize', function(){
       var h = window.visualViewport.height;
-      if (h < prev){ setTimeout(focusRoll,80); setTimeout(focusRoll,300); }
-      prev = h;
+      if (h < prevH){
+        // keyboard appeared or grew
+        [80, 250, 500].forEach(function(ms){ setTimeout(focusRoll, ms); });
+      }
+      prevH = h;
+    });
+    window.visualViewport.addEventListener('scroll', function(){
+      setTimeout(focusRoll, 60);
     });
   }
 })();
@@ -517,6 +543,15 @@ class _BrowserShellState extends State<BrowserShell>
   @override
   Widget build(BuildContext context) {
     final safe = MediaQuery.of(context).viewPadding;
+    // viewInsets.bottom = keyboard height. Always available from MediaQuery
+    // regardless of resizeToAvoidBottomInset. On iOS we shrink the WebView
+    // container by this value so WKWebView reports a correctly reduced
+    // visualViewport.height to JavaScript — this is what makes the focused
+    // input scroll into view above the keyboard. On Android the JS
+    // focusin/visualViewport listener handles it without native resize.
+    final kbHeight = Platform.isIOS
+        ? MediaQuery.of(context).viewInsets.bottom
+        : 0.0;
 
     return PopScope(
       canPop: false,
@@ -525,14 +560,22 @@ class _BrowserShellState extends State<BrowserShell>
       },
       child: Scaffold(
         backgroundColor: Colors.black,
+        // Keep false — we handle keyboard avoidance manually via kbHeight
+        // above. Setting this to true causes layout jumps on full-screen
+        // casino pages and fights with immersiveSticky mode.
         resizeToAvoidBottomInset: false,
         body: Stack(
           fit: StackFit.expand,
           children: [
-            Padding(
+            AnimatedPadding(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOut,
               padding: EdgeInsets.only(
                 top: safe.top,
-                bottom: safe.bottom,
+                // When keyboard is visible the bottom shrinks so the
+                // WKWebView viewport height reduces and the focused input
+                // stays visible above the keyboard.
+                bottom: safe.bottom + kbHeight,
                 left: safe.left,
                 right: safe.right,
               ),
