@@ -73,8 +73,14 @@ class AudioService with WidgetsBindingObserver {
             usageType: AndroidUsageType.media,
             audioFocus: AndroidAudioFocus.none,
           ),
+          // iOS rejects `mixWithOthers` unless the category is one of
+          // playback / playAndRecord / multiRoute. Earlier we used `ambient`
+          // (which itself implies mixing) and audioplayers' assertion fired.
+          // `playback` is the correct category for a music-driven game and
+          // explicitly allows mixWithOthers so SFX players spawned later
+          // don't pause the looping BGM.
           iOS: AudioContextIOS(
-            category: AVAudioSessionCategory.ambient,
+            category: AVAudioSessionCategory.playback,
             options: const {AVAudioSessionOptions.mixWithOthers},
           ),
         ),
@@ -97,6 +103,10 @@ class AudioService with WidgetsBindingObserver {
             contentType: AndroidContentType.music,
             usageType: AndroidUsageType.media,
             audioFocus: AndroidAudioFocus.none,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: const {AVAudioSessionOptions.mixWithOthers},
           ),
         ),
       );
