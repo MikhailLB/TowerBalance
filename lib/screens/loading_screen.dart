@@ -28,7 +28,29 @@ import 'main_menu_screen.dart';
 ///   6. A single listener restarts the video only when the platform reports
 ///      it has actually finished, instead of polling.
 class LoadingScreen extends StatefulWidget {
-  const LoadingScreen({super.key});
+  /// Optional gray-flow integration:
+  ///
+  /// When [routeFuture] is non-null, the splash navigates to the resolved
+  /// [WidgetBuilder] instead of [MainMenuScreen] when the bar animation
+  /// finishes (and after [contentReady] resolves, if provided).
+  ///
+  /// When [keepAsUnderlay] resolves to `true` the resolved widget is mounted
+  /// as a sibling beneath the splash (so it can paint while the bar finishes)
+  /// and the splash simply fades out instead of pushing a new route. This is
+  /// what the gray BrowserShell flow uses to keep the WKWebView state alive
+  /// across the splash → ready handover. For routes that don't care
+  /// (MainMenu, NetworkPause), [keepAsUnderlay] can be null/false and the
+  /// classic [Navigator.pushReplacement] path is used.
+  final Future<WidgetBuilder>? routeFuture;
+  final Future<void>? contentReady;
+  final Future<bool>? keepAsUnderlay;
+
+  const LoadingScreen({
+    super.key,
+    this.routeFuture,
+    this.contentReady,
+    this.keepAsUnderlay,
+  });
 
   @override
   State<LoadingScreen> createState() => _LoadingScreenState();
@@ -53,6 +75,18 @@ class _LoadingScreenState extends State<LoadingScreen>
   static const _barDelay = Duration(milliseconds: 120);
   static const _barDuration = Duration(milliseconds: 4500);
 
+  // Hard ceiling we wait for [widget.contentReady]. If the underlay never
+  // signals (e.g. WebView crashed silently) the splash still hands over so
+  // the user is never stuck on the loading bar forever.
+  static const _contentReadyDeadline = Duration(seconds: 6);
+
+  WidgetBuilder? _resolvedBuilder;
+  bool _routeResolved = false;
+  bool _contentReady = false;
+  bool? _keepDecision;
+  bool _splashVisible = true;
+  bool _underlayFade = false;
+
   @override
   void initState() {
     super.initState();
@@ -64,7 +98,63 @@ class _LoadingScreenState extends State<LoadingScreen>
       duration: _barDuration,
     );
 
+    _wireRouteFuture();
+    _wireContentReady();
+    _wireKeepDecision();
+
     _initialise();
+  }
+
+  void _wireRouteFuture() {
+    final future = widget.routeFuture;
+    if (future == null) {
+      _routeResolved = true;
+      return;
+    }
+    future.then((builder) {
+      if (!mounted) return;
+      setState(() {
+        _resolvedBuilder = builder;
+        _routeResolved = true;
+      });
+    }).catchError((err, st) {
+      debugPrint('LoadingScreen: route future failed: $err\n$st');
+      if (!mounted) return;
+      setState(() => _routeResolved = true);
+    });
+  }
+
+  void _wireContentReady() {
+    final ready = widget.contentReady;
+    if (ready == null) {
+      _contentReady = true;
+      return;
+    }
+    ready.timeout(_contentReadyDeadline, onTimeout: () {
+      debugPrint('LoadingScreen: contentReady timeout — handing over');
+    }).then((_) {
+      if (!mounted) return;
+      setState(() => _contentReady = true);
+    }).catchError((err) {
+      debugPrint('LoadingScreen: contentReady error: $err');
+      if (!mounted) return;
+      setState(() => _contentReady = true);
+    });
+  }
+
+  void _wireKeepDecision() {
+    final keep = widget.keepAsUnderlay;
+    if (keep == null) {
+      _keepDecision = false;
+      return;
+    }
+    keep.then((v) {
+      if (!mounted) return;
+      setState(() => _keepDecision = v);
+    }).catchError((_) {
+      if (!mounted) return;
+      setState(() => _keepDecision = false);
+    });
   }
 
   Future<void> _initialise() async {
@@ -89,8 +179,16 @@ class _LoadingScreenState extends State<LoadingScreen>
       await Future<void>.delayed(_minDuration - elapsed);
     }
 
+    // Gray-flow extension: wait until both the resolved builder AND any
+    // contentReady future are settled before handing over. Capped by the
+    // deadline above so a flaky web payload still releases the splash.
+    while (mounted && (!_routeResolved || !_contentReady)) {
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+    }
+    if (!mounted) return;
+
     await Future<void>.delayed(const Duration(milliseconds: 300));
-    _goToMenu();
+    _handoff();
   }
 
   Future<void> _initVideos() async {
@@ -205,13 +303,28 @@ class _LoadingScreenState extends State<LoadingScreen>
     }
   }
 
-  void _goToMenu() {
+  /// Either fades the splash out (underlay mode — the resolved widget is
+  /// already mounted beneath) or pushes the resolved widget as a new top
+  /// level route. Falls back to [MainMenuScreen] when no builder was
+  /// supplied (classic standalone flow).
+  Future<void> _handoff() async {
     if (_hasNavigated || !mounted) return;
     _hasNavigated = true;
+
+    final builder = _resolvedBuilder ?? (_) => const MainMenuScreen();
+    final keep = _keepDecision == true && _resolvedBuilder != null;
+
+    if (keep) {
+      // Underlay mode: just fade out — the builder is already mounted
+      // beneath the splash in [build].
+      setState(() => _underlayFade = true);
+      return;
+    }
+
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondary) =>
-            const MainMenuScreen(),
+            Builder(builder: builder),
         transitionDuration: const Duration(milliseconds: 600),
         transitionsBuilder: (context, animation, secondary, child) =>
             FadeTransition(opacity: animation, child: child),
@@ -235,10 +348,44 @@ class _LoadingScreenState extends State<LoadingScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Underlay mode: the resolved builder is mounted beneath the splash so it
+    // can paint while the loading bar finishes (used by the gray BrowserShell
+    // flow to keep the WKWebView alive across the handover).
+    final renderUnderlay =
+        _keepDecision == true && _resolvedBuilder != null;
+
     return Scaffold(
       backgroundColor: Colors.black,
-      body: OrientationBuilder(
-        builder: (context, orientation) {
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (renderUnderlay)
+            Positioned.fill(child: Builder(builder: _resolvedBuilder!)),
+          if (_splashVisible)
+            Positioned.fill(
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 400),
+                opacity: _underlayFade ? 0.0 : 1.0,
+                onEnd: () {
+                  if (!mounted) return;
+                  if (_underlayFade && _splashVisible) {
+                    setState(() => _splashVisible = false);
+                  }
+                },
+                child: AbsorbPointer(
+                  absorbing: !_underlayFade,
+                  child: _buildSplash(context),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSplash(BuildContext context) {
+    return OrientationBuilder(
+      builder: (context, orientation) {
           final isPortrait = orientation == Orientation.portrait;
           final controller =
               isPortrait ? _portraitVideo : _landscapeVideo;
@@ -291,7 +438,6 @@ class _LoadingScreenState extends State<LoadingScreen>
             ],
           );
         },
-      ),
     );
   }
 }
