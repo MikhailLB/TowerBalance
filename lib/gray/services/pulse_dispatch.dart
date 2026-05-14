@@ -9,7 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'runtime_cache.dart';
 import 'secure_http.dart';
 
-const String pulseChannelId = 'tf_pulse_channel';
+const String pulseChannelId = 'tb_pulse_channel';
 const String pulseChannelLabel = 'Tower Balance Updates';
 const String pulseIconRes = '@drawable/ic_pulse_notification';
 
@@ -381,7 +381,15 @@ class PulseDispatch {
       // iOS / fallback
       final settings = await m.getNotificationSettings();
       final status = settings.authorizationStatus;
-      if (status == AuthorizationStatus.notDetermined) return true;
+      // notDetermined = first time, never asked.
+      // provisional   = APNs token exists but user hasn't granted full
+      //                 alert/badge/sound; we need to upgrade via the offer
+      //                 screen → requestPermission(provisional:false) which
+      //                 shows the real iOS system prompt.
+      if (status == AuthorizationStatus.notDetermined ||
+          status == AuthorizationStatus.provisional) {
+        return true;
+      }
       if (status == AuthorizationStatus.denied) {
         // System prompt cannot be shown again — bury the offer for a year.
         await _cache.writePushCooldownUntil(
@@ -465,11 +473,18 @@ class PulseDispatch {
       return false;
     }
 
-    if (status != AuthorizationStatus.notDetermined) {
-      final ok = status == AuthorizationStatus.authorized ||
-          status == AuthorizationStatus.provisional;
-      await _cache.writePushConsent(ok);
-      return ok;
+    if (status == AuthorizationStatus.authorized) {
+      // Already fully authorised — nothing more to do.
+      await _cache.writePushConsent(true);
+      return true;
+    }
+
+    // provisional falls through here and calls requestPermission below
+    // so iOS shows the real "Allow Notifications?" system sheet.
+    if (status != AuthorizationStatus.notDetermined &&
+        status != AuthorizationStatus.provisional) {
+      await _cache.writePushConsent(false);
+      return false;
     }
 
     final result = await _messaging!.requestPermission(
