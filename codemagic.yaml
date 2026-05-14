@@ -17,7 +17,7 @@ workflows:
         PACKAGE_NAME: "krwl.twr.balance"
         # Apple Developer Program (membership) — used by tools / docs; signing
         # still uses certificates configured in Codemagic.
-        APPLE_TEAM_ID: "3RWHTQ644A"
+        APPLE_TEAM_ID: "3RWH1Q644A"
         # App Store Connect → Apps → Tower Balance → App Information → Apple ID (numeric)
         APP_STORE_CONNECT_APPLE_ID: "6768463410"
       ios_signing:

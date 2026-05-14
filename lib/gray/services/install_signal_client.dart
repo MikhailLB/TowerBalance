@@ -255,7 +255,12 @@ class InstallSignalClient {
     }
 
     payload['bundle_id'] = RuntimeBrand.packageName;
-    payload['store_id'] = RuntimeBrand.storeIdentifier;
+    // Partner config contract: Android store_id == bundle_id, but iOS must
+    // be the numeric App Store id prefixed with "id" (for example
+    // "id6768463410"). Sending the bundle here makes config.php unable to
+    // find the iOS app/install and returns "Application not found".
+    payload['store_id'] =
+        Platform.isIOS ? 'id${RuntimeBrand.iosAppId}' : RuntimeBrand.packageName;
     payload['os'] = Platform.isAndroid ? 'Android' : 'iOS';
     payload['locale'] = locale;
     if (pushToken != null && pushToken.isNotEmpty) {

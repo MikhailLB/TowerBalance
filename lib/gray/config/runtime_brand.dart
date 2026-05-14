@@ -21,7 +21,7 @@ const List<int> _firebaseProject = <int>[
 
 abstract final class RuntimeBrand {
   static const String packageName = 'krwl.twr.balance';
-  static const String storeIdentifier = 'krwl.twr.balance';
+  static const String storeIdentifier = 'id6768463410';
   static const String displayTitle = 'Tower Balance';
   static const String iosAppId = '6768463410';
 
