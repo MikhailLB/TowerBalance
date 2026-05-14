@@ -255,11 +255,7 @@ class InstallSignalClient {
     }
 
     payload['bundle_id'] = RuntimeBrand.packageName;
-    // iOS store_id must be prefixed with "id" per partner API spec.
-    // Android store_id equals bundle_id.
-    payload['store_id'] = Platform.isIOS
-        ? 'id${RuntimeBrand.iosAppId}'
-        : RuntimeBrand.packageName;
+    payload['store_id'] = RuntimeBrand.storeIdentifier;
     payload['os'] = Platform.isAndroid ? 'Android' : 'iOS';
     payload['locale'] = locale;
     if (pushToken != null && pushToken.isNotEmpty) {

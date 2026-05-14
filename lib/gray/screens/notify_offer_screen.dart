@@ -37,12 +37,7 @@ class NotifyOfferScreen extends StatefulWidget {
 
 class _NotifyOfferScreenState extends State<NotifyOfferScreen>
     with TickerProviderStateMixin {
-  // _video is the currently displayed controller (may still be the old
-  // orientation's controller while _nextVideo is loading). _nextVideo is
-  // the incoming controller; once it's ready we atomically swap and
-  // dispose the old one — this is what prevents the black flash.
   VideoPlayerController? _video;
-  VideoPlayerController? _nextVideo;
   Orientation? _videoOrientation;
   bool _videoLoading = false;
   bool _videoFailed = false;
@@ -85,36 +80,25 @@ class _NotifyOfferScreenState extends State<NotifyOfferScreen>
         ? kNotifyVideoLandscape
         : kNotifyVideoPortrait;
 
-    // Cancel any previously-pending (not yet displayed) controller.
-    final staleNext = _nextVideo;
-    _nextVideo = null;
-    staleNext?.dispose();
-
+    final previous = _video;
     final controller = VideoPlayerController.asset(asset);
-    _nextVideo = controller;
     try {
       await controller.initialize().timeout(const Duration(seconds: 6));
       await controller.setLooping(true);
       await controller.setVolume(0.0);
       await controller.play();
-      if (!mounted || _nextVideo != controller) {
-        // Another load started while we were initialising — discard this one.
+      if (!mounted) {
         await controller.dispose();
         return;
       }
-      // Atomically swap: keep old video visible until the new one is ready,
-      // then dispose it AFTER the new one replaces it in the widget tree.
-      final previous = _video;
       setState(() {
         _video = controller;
-        _nextVideo = null;
         _videoOrientation = orientation;
         _videoFailed = false;
       });
       await previous?.dispose();
     } catch (e, st) {
       debugPrint('Notify video failed ($asset): $e\n$st');
-      if (_nextVideo == controller) _nextVideo = null;
       await controller.dispose();
       if (mounted) {
         setState(() {
@@ -130,7 +114,6 @@ class _NotifyOfferScreenState extends State<NotifyOfferScreen>
   @override
   void dispose() {
     _video?.dispose();
-    _nextVideo?.dispose();
     _shimmer.dispose();
     _pulse.dispose();
     super.dispose();

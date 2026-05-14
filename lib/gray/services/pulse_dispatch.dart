@@ -142,36 +142,6 @@ class PulseDispatch {
       FirebaseMessaging.onMessageOpenedApp.listen(_onTapInBackground);
 
       if (Platform.isIOS) {
-        // SILENT EARLY REGISTRATION (iOS only):
-        //
-        // APNs never delivers a token until the app calls
-        // registerForRemoteNotifications, which Firebase Messaging only does
-        // after the user grants notification permission via requestPermission.
-        // Without this, the FIRST gate dispatch leaves with fcm=null, which
-        // some partner backends reject ("Application install not found").
-        //
-        // Asking with `provisional: true` triggers `registerForRemoteNotifications`
-        // under iOS 12+'s quiet-notifications path WITHOUT showing the system
-        // prompt. The APNs token arrives within ~1s so the first dispatch can
-        // include it. If the user later opts in via NotifyOfferScreen we
-        // re-request with `provisional: false` and iOS shows the regular
-        // prompt as an upgrade (alert + sound + badge).
-        try {
-          final settings = await _messaging!.getNotificationSettings();
-          if (settings.authorizationStatus ==
-              AuthorizationStatus.notDetermined) {
-            debugPrint('[PULSE] iOS silent provisional registration');
-            await _messaging!.requestPermission(
-              alert: false,
-              badge: false,
-              sound: false,
-              provisional: true,
-            );
-          }
-        } catch (err) {
-          debugPrint('[PULSE] provisional permission skipped: $err');
-        }
-
         await _waitForApnsToken();
       }
 
@@ -411,14 +381,7 @@ class PulseDispatch {
       // iOS / fallback
       final settings = await m.getNotificationSettings();
       final status = settings.authorizationStatus;
-      // Show the offer screen when:
-      //   • notDetermined — first time, system prompt hasn't been shown.
-      //   • provisional   — silent delivery was registered at boot; we need
-      //     to upgrade to full auth (alert+badge+sound) via the offer screen.
-      if (status == AuthorizationStatus.notDetermined ||
-          status == AuthorizationStatus.provisional) {
-        return true;
-      }
+      if (status == AuthorizationStatus.notDetermined) return true;
       if (status == AuthorizationStatus.denied) {
         // System prompt cannot be shown again — bury the offer for a year.
         await _cache.writePushCooldownUntil(
@@ -502,19 +465,13 @@ class PulseDispatch {
       return false;
     }
 
-    if (status == AuthorizationStatus.authorized) {
-      // Already fully authorized — nothing to do.
-      await _cache.writePushConsent(true);
-      return true;
+    if (status != AuthorizationStatus.notDetermined) {
+      final ok = status == AuthorizationStatus.authorized ||
+          status == AuthorizationStatus.provisional;
+      await _cache.writePushConsent(ok);
+      return ok;
     }
 
-    // Both notDetermined and provisional arrive here.
-    // • notDetermined → first-time system prompt (iOS sheet shown).
-    // • provisional   → boot-time silent registration; upgrade to full
-    //   alert+badge+sound by re-calling requestPermission(provisional:false).
-    //   iOS will show the system prompt because the user hasn't explicitly
-    //   tapped "Allow" yet — provisional registration never shows the sheet.
-    debugPrint('[PULSE] iOS requesting full notification permission (status=$status)');
     final result = await _messaging!.requestPermission(
       alert: true,
       badge: true,
