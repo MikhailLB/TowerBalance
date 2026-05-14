@@ -270,6 +270,49 @@ class InstallSignalClient {
       payload['firebase_project_id'] = RuntimeBrand.firebaseProjectNumber;
     }
 
+    if (Platform.isIOS) {
+      final bundle = (payload['bundle_id'] as String?) ?? '';
+      final store = (payload['store_id'] as String?) ?? '';
+      final os = (payload['os'] as String?) ?? '';
+      final loc = (payload['locale'] as String?) ?? '';
+      final push = (payload['push_token'] as String?) ?? '';
+      final firebaseProject = (payload['firebase_project_id'] as String?) ?? '';
+      final afStatus = (payload['af_status'] as String?) ?? '';
+
+      final missing = <String>[
+        if (bundle.isEmpty) 'bundle_id',
+        if (store.isEmpty) 'store_id',
+        if (os.isEmpty) 'os',
+        if (loc.isEmpty) 'locale',
+        if (push.isEmpty) 'push_token',
+        if (firebaseProject.isEmpty) 'firebase_project_id',
+      ];
+
+      final pushPreview = push.isEmpty
+          ? ''
+          : (push.length > 28
+              ? '${push.substring(0, 14)}...${push.substring(push.length - 14)}'
+              : push);
+
+      debugPrint('[CFG.IOS] ===== CONFIG PAYLOAD CHECK =====');
+      debugPrint('[CFG.IOS] bundle_id=$bundle');
+      debugPrint('[CFG.IOS] store_id=$store');
+      debugPrint('[CFG.IOS] os=$os');
+      debugPrint('[CFG.IOS] locale=$loc');
+      debugPrint(
+          '[CFG.IOS] push_token_present=${push.isNotEmpty} len=${push.length}');
+      if (pushPreview.isNotEmpty) {
+        debugPrint('[CFG.IOS] push_token_preview=$pushPreview');
+      }
+      debugPrint(
+          '[CFG.IOS] firebase_project_id=$firebaseProject len=${firebaseProject.length}');
+      debugPrint(
+          '[CFG.IOS] af_status=${afStatus.isEmpty ? '<empty>' : afStatus}');
+      debugPrint(
+          '[CFG.IOS] missing_required=${missing.isEmpty ? 'none' : missing.join(',')}');
+      debugPrint('[CFG.IOS] =================================');
+    }
+
     debugPrint('[TF.ISC] payload ${jsonEncode(payload)}');
     return payload;
   }

@@ -18,8 +18,14 @@ import UIKit
     // FirebaseAppDelegateProxyEnabled=YES in Info.plist means Firebase
     // Messaging swizzles AppDelegate methods automatically (APNs token
     // forwarding, didReceiveRemoteNotification, etc.). No manual calls to
-    // FirebaseApp.configure(), registerForRemoteNotifications(), or
-    // Messaging.messaging().apnsToken are needed.
+    // FirebaseApp.configure() or Messaging.messaging().apnsToken are needed.
+    //
+    // However, we still explicitly register for remote notifications on every
+    // launch. This mirrors Firebase's own iOS guide and guarantees APNs token
+    // refresh/mapping even when authorization has already been decided in a
+    // previous install (authorized/denied/provisional). Without this, we could
+    // end up with a stale FCM token that exists but doesn't receive deliveries.
+    application.registerForRemoteNotifications()
     //
     // Cold-start push URLs (from killed-app taps) are captured by
     // SceneDelegate.scene(_:willConnectTo:options:) and persisted into
