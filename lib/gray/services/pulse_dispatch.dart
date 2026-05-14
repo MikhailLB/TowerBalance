@@ -155,6 +155,11 @@ class PulseDispatch {
       debugPrint(
         '[PULSE] bootstrap OK, token=${_token == null ? 'null' : '${_token!.substring(0, _token!.length.clamp(0, 12))}…'}',
       );
+      // Full FCM token — copy from Xcode console and paste into Firebase
+      // "Test on device" dialog to send a test push to this device.
+      if (_token != null) {
+        debugPrint('[PULSE] FCM TOKEN (full): $_token');
+      }
     } catch (err, st) {
       debugPrint('[PULSE] bootstrap failed: $err');
       debugPrint('$st');
