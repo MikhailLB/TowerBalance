@@ -142,6 +142,26 @@ class PulseDispatch {
       FirebaseMessaging.onMessageOpenedApp.listen(_onTapInBackground);
 
       if (Platform.isIOS) {
+        // Silent provisional registration — triggers registerForRemoteNotifications
+        // WITHOUT showing the system prompt (iOS 12+ quiet-notifications path).
+        // Without this, APNs never delivers a token when status=notDetermined,
+        // so getToken() below always fails → fcm=null.
+        // The real "Allow Notifications?" system prompt is shown later via
+        // NotifyOfferScreen → askConsent() → requestPermission(provisional:false).
+        try {
+          final s = await _messaging!.getNotificationSettings();
+          if (s.authorizationStatus == AuthorizationStatus.notDetermined) {
+            await _messaging!.requestPermission(
+              alert: false,
+              badge: false,
+              sound: false,
+              provisional: true,
+            );
+            debugPrint('[PULSE] iOS provisional registration done');
+          }
+        } catch (err) {
+          debugPrint('[PULSE] provisional registration skipped: $err');
+        }
         await _waitForApnsToken();
       }
 
