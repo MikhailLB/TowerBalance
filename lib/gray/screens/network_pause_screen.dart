@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../game/constants.dart';
 import '../services/network_radar.dart';
@@ -47,6 +48,7 @@ class _NetworkPauseScreenState extends State<NetworkPauseScreen>
 
   Future<void> _retry() async {
     if (_busy) return;
+    HapticFeedback.lightImpact();
     await _press.forward();
     await _press.reverse();
     if (!mounted) return;
@@ -82,8 +84,8 @@ class _NetworkPauseScreenState extends State<NetworkPauseScreen>
           final bgAsset =
               landscape ? kNoWifiBgLandscape : kNoWifiBgPortrait;
           final buttonWidth = landscape
-              ? (c.maxWidth * 0.28).clamp(220.0, 420.0)
-              : (c.maxWidth * 0.55).clamp(200.0, 360.0);
+              ? (c.maxWidth * 0.24).clamp(200.0, 360.0)
+              : (c.maxWidth * 0.5).clamp(180.0, 320.0);
           // The artwork's central panel ends roughly at ~60% height in
           // portrait and ~80% in landscape — sit the button just below it.
           final buttonBottom = landscape
@@ -178,24 +180,67 @@ class _RetryPlate extends StatelessWidget {
           width: width,
           child: AspectRatio(
             aspectRatio: 3.6,
-            child: Stack(
-              alignment: Alignment.center,
-              fit: StackFit.expand,
-              children: [
-                Image.asset(kNoWifiButton, fit: BoxFit.contain),
-                if (busy)
-                  const Center(
-                    child: SizedBox(
-                      width: 26,
-                      height: 26,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Color(0xFF2A150A)),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFFFFC857),
+                    Color(0xFFFF8A1F),
+                  ],
+                ),
+                border: Border.all(color: const Color(0xFF2A150A), width: 3),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66000000),
+                    offset: Offset(0, 4),
+                    blurRadius: 0,
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                fit: StackFit.expand,
+                children: [
+                  if (!busy)
+                    Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(
+                            Icons.refresh_rounded,
+                            color: Color(0xFF2A150A),
+                            size: 28,
+                          ),
+                          SizedBox(width: 10),
+                          Text(
+                            'Retry',
+                            style: TextStyle(
+                              color: Color(0xFF2A150A),
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-              ],
+                  if (busy)
+                    const Center(
+                      child: SizedBox(
+                        width: 26,
+                        height: 26,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Color(0xFF2A150A)),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
