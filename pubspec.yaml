@@ -1,7 +1,7 @@
 name: tower_balance
 description: "TowerBalance - balance the falling blocks and build the tallest tower!"
 publish_to: 'none'
-version: 1.0.0+1 # Marketing + build: synced to iOS/Android via Flutter tooling
+version: 1.0.0+2 # Marketing + build: synced to iOS/Android via Flutter tooling
 
 
 environment:
