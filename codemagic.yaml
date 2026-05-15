@@ -38,6 +38,8 @@ workflows:
           include: true
         - pattern: "grey-ios"
           include: true
+        - pattern: "grey-ios-no-ext"
+          include: true
 
     scripts:
       - name: Prepare Android signing

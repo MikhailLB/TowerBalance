@@ -1,7 +1,7 @@
 name: tower_balance
 description: "TowerBalance - balance the falling blocks and build the tallest tower!"
 publish_to: 'none'
-version: 1.0.1+7 # Marketing + build: new marketing version resets build counter
+version: 1.0.1+8 # Marketing + build: new marketing version resets build counter
 
 
 environment:
