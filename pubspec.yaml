@@ -49,9 +49,10 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Disable Swift Package Manager to prevent Firebase module redefinition conflict.
-  # Firebase is managed via CocoaPods (Podfile) — SPM would pull it in twice.
-  disable-swift-package-manager: true
+  config:
+    # Disable Swift Package Manager to prevent Firebase module redefinition conflict.
+    # Firebase is managed via CocoaPods (Podfile) — SPM would pull it in twice.
+    enable-swift-package-manager: false
 
   assets:
     - assets/logo.webp
