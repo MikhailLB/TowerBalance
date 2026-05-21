@@ -15,15 +15,16 @@ class ShopScreen extends StatefulWidget {
 }
 
 class _ShopScreenState extends State<ShopScreen> {
-  // Per-skin price ladder. Skins 1..3 are buyable; skins 4..6 are placeholders
-  // for upcoming content ("Coming soon"), so we leave their price at 0 and
-  // gate the purchase flow on [_isComingSoon].
   static const Map<int, int> _skinPrices = {
     1: 10,
     2: 100,
     3: 500,
+    4: 250,
+    5: 750,
+    6: 1500,
   };
-  static const int _firstComingSoonSkin = 4; // 4, 5, 6 are locked.
+  // All 6 skins are now available for purchase.
+  static const int _firstComingSoonSkin = 7;
   static const _slowHookPrice = 35;
   static const _secondChancePrice = 60;
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show min;
 
 import 'package:flame/flame.dart';
 import 'package:flutter/material.dart';
@@ -413,11 +414,13 @@ class _LoadingScreenState extends State<LoadingScreen>
                 Positioned(
                   left: 0,
                   right: 0,
-                  // Glue the bar to the very bottom edge of the screen so it
-                  // never collides with the centre/lower text baked into the
-                  // splash video. Safe-area is intentionally ignored here —
-                  // the bar art has its own padding around the pixels.
-                  bottom: 0,
+                  // On tablets (iPad) the bar width was too large — the image
+                  // scaled up proportionally in height, pushing its top edge
+                  // into the "LOADING" text baked into the video. We clamp
+                  // the bottom so the bar stays near the screen edge on all
+                  // devices. The safe-area bottom is included so nothing hides
+                  // under the Home Indicator on notched / dynamic-island iPads.
+                  bottom: MediaQuery.of(context).padding.bottom,
                   child: Center(
                     child: AnimatedBuilder(
                       animation: _progressController,
@@ -473,7 +476,12 @@ class _LoadingBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final width = isPortrait ? size.width * 0.7 : size.height * 0.4;
+    // Cap width on tablets (iPads): a 70% width on a 768px+ screen produces
+    // a very tall bar image that overlaps the "LOADING" text in the video.
+    // 340 px is wide enough to look good on phones and small enough to stay
+    // below the "LOADING" label on any iPad.
+    final rawWidth = isPortrait ? size.width * 0.7 : size.height * 0.4;
+    final width = min(rawWidth, 340.0);
     return Image.asset(
       AppAssets.loadingBar(state),
       width: width,
