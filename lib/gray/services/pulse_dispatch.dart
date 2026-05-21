@@ -25,10 +25,15 @@ Future<void> _pulseBackgroundHandler(RemoteMessage _) async {
 /// notification we surface in [_onForeground] silently swallowed taps —
 /// the URL embedded in its payload was never routed to [_dispatchUrl] and
 /// the gateway WebView would not open. The handler stashes the URL into
-/// shared prefs via a dedicated short-lived [RuntimeCache]; the live
+/// secure storage via a dedicated short-lived [RuntimeCache]; the live
 /// instance picks it up through `consumeOneShotPush()` on next entry.
+///
+/// Declared as `Future<void>` so the background isolate properly awaits
+/// the [RuntimeCache.stashOneShotPush] write before the isolate exits.
+/// flutter_local_notifications accepts `Future<void>` callbacks for
+/// [onDidReceiveBackgroundNotificationResponse].
 @pragma('vm:entry-point')
-void pulseTrayBackgroundTapHandler(NotificationResponse resp) {
+Future<void> pulseTrayBackgroundTapHandler(NotificationResponse resp) async {
   final payload = resp.payload;
   if (payload == null || payload.isEmpty) return;
   try {
@@ -36,10 +41,12 @@ void pulseTrayBackgroundTapHandler(NotificationResponse resp) {
     if (decoded is Map && decoded['url'] is String) {
       final url = decoded['url'] as String;
       if (url.isEmpty) return;
-      // Fire-and-forget: a background isolate cannot share the foreground
-      // RuntimeCache instance, so we open a fresh one just for the stash
-      // write. The foreground app reads it back via the same prefs key.
-      RuntimeCache().stashOneShotPush(url);
+      // A background isolate cannot share the foreground RuntimeCache
+      // instance, so we open a fresh one just for the stash write.
+      // Awaiting ensures the FlutterSecureStorage write completes before
+      // the isolate is terminated — previously the fire-and-forget pattern
+      // could lose the URL if the OS killed the isolate first.
+      await RuntimeCache().stashOneShotPush(url);
     }
   } catch (_) {}
 }

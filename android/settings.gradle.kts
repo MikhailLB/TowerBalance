@@ -21,6 +21,10 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "8.7.2" apply false
     id("org.jetbrains.kotlin.android") version "2.1.21" apply false
+    // Required for Firebase to process google-services.json at build time.
+    // Without this the resources file is never generated and
+    // Firebase.initializeApp() silently fails at runtime.
+    id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
 include(":app")

@@ -51,6 +51,7 @@
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
@@ -80,7 +81,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSUserTrackingUsageDescription</key>
-	<string>We use this identifier to personalise tournaments, in-game offers and reward animations across your sessions.</string>
+	<string>We use this identifier to personalise in-game tournaments, tailor reward drops to your play style, and measure which of our campaigns bring the best players to the community.</string>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -96,10 +97,6 @@
 		<string>mailto</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Access is requested by the embedded web view if a page asks you to attach a photo. You will be prompted before the camera is used.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Access is requested by the embedded web view if a page asks you to attach audio media. You will be prompted before the microphone is used.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Photo library access is used to attach images requested by the web page.</string>
+	<string>Tower Balance uses your camera to let you capture and share your best tower builds and high-score moments with the community.</string>
 </dict>
 </plist>
