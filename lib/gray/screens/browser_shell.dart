@@ -290,6 +290,12 @@ class _BrowserShellState extends State<BrowserShell>
   if (window.__tfKbFix) return;
   window.__tfKbFix = true;
   function inputLike(n){ return n && (n.tagName==='INPUT' || n.tagName==='TEXTAREA' || n.isContentEditable); }
+
+  // Scroll the focused input into view.
+  // IMPORTANT: behavior:'auto' (instant) instead of 'smooth' — iOS keyboard
+  // animation takes ~250ms; running a smooth-scroll simultaneously causes
+  // WKScrollView to fight the keyboard animator, producing the visible jitter.
+  // block:'nearest' minimises the scroll delta so the viewport barely moves.
   function focusRoll(){
     var el = document.activeElement;
     if (!inputLike(el)) return;
@@ -297,24 +303,27 @@ class _BrowserShellState extends State<BrowserShell>
     if (vp){
       var r = el.getBoundingClientRect();
       if (r.bottom > vp.offsetTop + vp.height - 20 || r.top < vp.offsetTop){
-        el.scrollIntoView({ behavior:'smooth', block:'center' });
+        el.scrollIntoView({ behavior:'auto', block:'nearest' });
       }
     } else {
-      el.scrollIntoView({ behavior:'smooth', block:'center' });
+      el.scrollIntoView({ behavior:'auto', block:'nearest' });
     }
   }
+
+  // Single delayed call at 350ms — after iOS keyboard animation finishes
+  // (~250ms). Previously 3 calls at 250/500/800ms stacked on top of the
+  // keyboard animation, each triggering an additional WKScrollView pass.
   document.addEventListener('focusin', function(e){
     if (inputLike(e.target)){
-      setTimeout(focusRoll,250);
-      setTimeout(focusRoll,500);
-      setTimeout(focusRoll,800);
+      setTimeout(focusRoll, 350);
     }
   });
+
   if (window.visualViewport){
     var prev = window.visualViewport.height;
     window.visualViewport.addEventListener('resize', function(){
       var h = window.visualViewport.height;
-      if (h < prev){ setTimeout(focusRoll,80); setTimeout(focusRoll,300); }
+      if (h < prev){ setTimeout(focusRoll, 120); }
       prev = h;
     });
   }
@@ -397,7 +406,18 @@ class _BrowserShellState extends State<BrowserShell>
     + 'html,body,#__nuxt,#__layout,#app,#root,.gameview-mobile-header{'
     + 'padding-top:0!important;padding-left:0!important;padding-right:0!important;margin-top:0!important;'
     + '}';
+
+  // Returns true when the soft keyboard is likely visible.
+  // Mutating the viewport <meta> or CSS while the keyboard is animating
+  // causes WKWebView to recompute safe-area insets mid-animation, which
+  // makes the keyboard visibly jump. We skip the patch in that window.
+  function kbOpen(){
+    if (!window.visualViewport) return false;
+    return window.visualViewport.height < window.innerHeight * 0.75;
+  }
+
   function apply(){
+    if (kbOpen()) return; // never patch while keyboard is visible
     var head = document.head || document.documentElement;
     if (!head) return;
     var vp = document.querySelector('meta[name="viewport"]');
@@ -410,16 +430,20 @@ class _BrowserShellState extends State<BrowserShell>
     if (s.textContent !== CSS) s.textContent = CSS;
     if (head.lastElementChild !== s) head.appendChild(s);
   }
+
   apply();
   ['pushState','replaceState'].forEach(function(name){
     var orig = history[name];
     history[name] = function(){
       var r = orig.apply(this, arguments);
-      setTimeout(apply,80); setTimeout(apply,400);
+      // Delay enough for any pending keyboard dismiss to finish first
+      setTimeout(apply, 150); setTimeout(apply, 600);
       return r;
     };
   });
-  window.addEventListener('popstate', function(){ setTimeout(apply,80); });
+  window.addEventListener('popstate', function(){ setTimeout(apply, 150); });
+  // Safety-net re-apply for SPAs that reset viewport without history API.
+  // Guard already inside apply() skips the call when keyboard is open.
   setInterval(apply, 2500);
 })();
 ''');
