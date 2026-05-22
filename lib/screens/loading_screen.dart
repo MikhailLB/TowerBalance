@@ -414,13 +414,15 @@ class _LoadingScreenState extends State<LoadingScreen>
                 Positioned(
                   left: 0,
                   right: 0,
-                  // On tablets (iPad) the bar width was too large — the image
-                  // scaled up proportionally in height, pushing its top edge
-                  // into the "LOADING" text baked into the video. We clamp
-                  // the bottom so the bar stays near the screen edge on all
-                  // devices. The safe-area bottom is included so nothing hides
-                  // under the Home Indicator on notched / dynamic-island iPads.
-                  bottom: MediaQuery.of(context).padding.bottom,
+                  // Portrait: respect the Home Indicator safe-area so the bar
+                  // isn't hidden under it.
+                  // Landscape: use absolute bottom (0) — adding padding.bottom
+                  // (~21pt on Face ID iPhones) shifts the bar UP by 21pt and
+                  // pushes it into the "LOADING" text that is baked into the
+                  // horizontal video near the bottom of the frame.
+                  bottom: isPortrait
+                      ? MediaQuery.of(context).padding.bottom
+                      : 0,
                   child: Center(
                     child: AnimatedBuilder(
                       animation: _progressController,
@@ -476,14 +478,18 @@ class _LoadingBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    // Portrait: cap at 340px (fixes iPad landscape-video overlap).
-    // Landscape: the horizontal loading video places "LOADING.." near the
-    // vertical centre of the screen. Our bar at bottom:0 needs to be SMALLER
-    // so its top edge stays below that text. 0.28×height (≈109px on iPhone,
-    // ≤215px on iPad landscape) gives a clear gap. Hard-cap at 200px as an
-    // extra safety net for large iPads.
-    final rawWidth = isPortrait ? size.width * 0.7 : size.height * 0.28;
-    final maxWidth = isPortrait ? 340.0 : 200.0;
+    // Bar image is 256×96 px (ratio ≈ 2.67:1).
+    //
+    // Portrait: cap at 340px → height ≈ 127px → clears "LOADING" text on iPad.
+    //
+    // Landscape: the 16:9 loading video has "LOADING" text at ~83% from the
+    // top of the video. After BoxFit.cover crops the over-tall video on a
+    // standard iPhone (e.g. 844×390) the text lands at ~351pt from the top,
+    // leaving only ~39pt to the bottom. A 80pt-wide bar → height ≈ 30pt →
+    // bar.top = 360pt → 9pt gap below the text. Caps at 80px so it never
+    // overflows. Previously 200px cap → bar 75px tall → top at 315pt → overlap.
+    final rawWidth = isPortrait ? size.width * 0.7 : size.height * 0.21;
+    final maxWidth = isPortrait ? 340.0 : 80.0;
     final width = min(rawWidth, maxWidth);
     return Image.asset(
       AppAssets.loadingBar(state),
