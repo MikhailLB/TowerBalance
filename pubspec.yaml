@@ -37,7 +37,6 @@ dependencies:
   webview_flutter_wkwebview: ^3.22.0
   app_tracking_transparency: 2.0.5
   file_picker: ^10.3.4
-  image_picker: ^1.2.1
 
 dev_dependencies:
   flutter_test:

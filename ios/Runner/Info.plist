@@ -98,5 +98,7 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Tower Balance uses your camera to let you capture and share your best tower builds and high-score moments with the community.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We save your high-score screenshots and tower build photos to your library so you can share your achievements with friends.</string>
 </dict>
 </plist>
