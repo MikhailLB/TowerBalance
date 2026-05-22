@@ -479,17 +479,13 @@ class _LoadingBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     // Bar image is 256×96 px (ratio ≈ 2.67:1).
-    //
-    // Portrait: cap at 340px → height ≈ 127px → clears "LOADING" text on iPad.
-    //
-    // Landscape: the 16:9 loading video has "LOADING" text at ~83% from the
-    // top of the video. After BoxFit.cover crops the over-tall video on a
-    // standard iPhone (e.g. 844×390) the text lands at ~351pt from the top,
-    // leaving only ~39pt to the bottom. A 80pt-wide bar → height ≈ 30pt →
-    // bar.top = 360pt → 9pt gap below the text. Caps at 80px so it never
-    // overflows. Previously 200px cap → bar 75px tall → top at 315pt → overlap.
-    final rawWidth = isPortrait ? size.width * 0.7 : size.height * 0.21;
-    final maxWidth = isPortrait ? 340.0 : 80.0;
+    // Portrait : 70% of screen width, capped at 340px (prevents iPad overflow).
+    // Landscape: 35% of screen HEIGHT (the short dimension) gives a bar roughly
+    //            the same physical size as in portrait. Capped at 160px so it
+    //            stays small enough not to reach the "LOADING" text above.
+    //            Previously we used 0.21×h/80px cap — bar was too tiny to see.
+    final rawWidth = isPortrait ? size.width * 0.7 : size.height * 0.35;
+    final maxWidth = isPortrait ? 340.0 : 160.0;
     final width = min(rawWidth, maxWidth);
     return Image.asset(
       AppAssets.loadingBar(state),
