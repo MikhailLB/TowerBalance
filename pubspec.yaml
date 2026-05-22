@@ -1,7 +1,7 @@
 name: tower_balance
 description: "TowerBalance - balance the falling blocks and build the tallest tower!"
 publish_to: 'none'
-version: 1.0.1+12
+version: 1.0.1+13
 
 
 environment:
